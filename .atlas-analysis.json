@@ -1,0 +1,141 @@
+{
+  "projectType": "saas",
+  "projectName": "Muebles Roble - Furniture Management System",
+  "projectDescription": "A comprehensive furniture manufacturing management system for controlling production from raw materials to finished products with inventory tracking and catalog management.",
+  "theme": "maple",
+  "primaryColor": "#8B4513",
+  "lightColor": "#D2691E",
+  "darkColor": "#5C3317",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Get Started",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "introduction",
+              "features"
+            ]
+          },
+          {
+            "group": "Quickstart",
+            "pages": [
+              "quickstart/installation",
+              "quickstart/configuration",
+              "quickstart/first-steps"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Core Features",
+        "groups": [
+          {
+            "group": "Catalog Management",
+            "pages": [
+              "features/catalogs/overview",
+              "features/catalogs/colors",
+              "features/catalogs/wood-types",
+              "features/catalogs/furniture-types",
+              "features/catalogs/roles",
+              "features/catalogs/units-of-measure"
+            ]
+          },
+          {
+            "group": "Inventory",
+            "pages": [
+              "features/inventory/raw-materials",
+              "features/inventory/finished-products"
+            ]
+          },
+          {
+            "group": "Production",
+            "pages": [
+              "features/production/workflow",
+              "features/production/traceability"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Architecture",
+        "groups": [
+          {
+            "group": "System Design",
+            "pages": [
+              "architecture/overview",
+              "architecture/mvc-layers",
+              "architecture/modules"
+            ]
+          },
+          {
+            "group": "Database",
+            "pages": [
+              "architecture/database/models",
+              "architecture/database/migrations",
+              "architecture/database/schema"
+            ]
+          },
+          {
+            "group": "Error Handling",
+            "pages": [
+              "architecture/error-handling"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Development",
+        "groups": [
+          {
+            "group": "Developer Guide",
+            "pages": [
+              "development/setup",
+              "development/project-structure",
+              "development/coding-conventions"
+            ]
+          },
+          {
+            "group": "Templates & Forms",
+            "pages": [
+              "development/templates",
+              "development/forms"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "development/deployment",
+              "development/environment-variables"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Catalog management for wood types, colors, and furniture types",
+    "Raw material and finished product inventory tracking",
+    "Production workflow management with traceability",
+    "Layered MVC architecture with Flask and SQLAlchemy",
+    "Form-based CRUD operations with WTForms validation",
+    "Soft deletion and audit tracking for all records",
+    "Template-driven UI with Jinja2",
+    "Centralized error handling with custom exceptions"
+  ],
+  "publicApiSurface": [
+    "ColorService.create(data: dict) -> dict",
+    "ColorService.get_all() -> list[Color]",
+    "ColorService.get_by_id(id_color: int) -> Color",
+    "ColorService.update(id_color: int, data: dict) -> dict",
+    "ColorService.delete(id_color: int) -> None",
+    "Color.to_dict() -> dict",
+    "WoodType model with CRUD operations",
+    "FurnitureType model with CRUD operations",
+    "Role model with CRUD operations",
+    "UnitOfMeasure model with CRUD operations",
+    "Flask blueprints: /colors, /wood-types, /furniture-types, /roles, /unit-of-measures",
+    "create_app() - Application factory pattern"
+  ]
+}
