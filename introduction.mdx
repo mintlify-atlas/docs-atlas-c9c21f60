@@ -17,7 +17,7 @@ Muebles Roble (Oak Furniture) is a web-based application that helps furniture ma
 
 - **Raw Material Inventory** - Wood types and supplies
 - **Finished Product Inventory** - Tables, chairs, closets, and more
-- **Product Catalogs** - Wood types, colors, furniture types
+- **Product Catalogs** - Wood types, colors, user roles, and units of measure
 - **Production Processes** - Complete production workflow tracking
 - **Inventory Control** - Full traceability and audit trails
 
@@ -25,7 +25,7 @@ Muebles Roble (Oak Furniture) is a web-based application that helps furniture ma
 
 <CardGroup cols={2}>
   <Card title="Catalog Management" icon="list">
-    Manage wood types (Pine, Cedar, Oak), colors (Natural, White, Black), and furniture types with complete CRUD operations.
+    Manage wood types (Pine, Cedar, Oak), colors (Natural, White, Black), user roles, and units of measure with complete CRUD operations.
   </Card>
   
   <Card title="Inventory Tracking" icon="boxes">
@@ -96,7 +96,7 @@ app/
 ├── catalogs/              # Catalog management modules
 │   ├── colors/            # Color catalog (Natural, White, Black, etc.)
 │   ├── wood_types/        # Wood types (Pine, Cedar, Oak, etc.)
-│   ├── furniture_type/    # Furniture types (Tables, Chairs, Closets)
+│   ├── furniture_type/    # Furniture types (code exists, not registered)
 │   ├── unit_of_measures/  # Units of measure (kg, m², pieces)
 │   └── roles/             # User roles (Admin, Operator, Viewer)
 │
