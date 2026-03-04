@@ -1,0 +1,180 @@
+---
+title: Architecture Overview
+description: High-level overview of the Muebles Roble system architecture
+---
+
+## Vision General
+
+The Muebles Roble system implements a **layered MVC architecture** (Model-View-Controller) following the principles of separation of concerns and loose coupling. It uses **Jinja2** as the template engine for rendering HTML views.
+
+## Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      WEB BROWSER                                │
+│                   (User / Client)                               │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                 WEB APPLICATION (Flask + Jinja2)                │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
+│  │   Colors    │  │  Wood Types │  │  Furniture  │   ...        │
+│  │   Module    │  │   Module    │  │   Module    │              │
+│  └─────────────┘  └─────────────┘  └─────────────┘              │
+├─────────────────────────────────────────────────────────────────┤
+│                    VIEW LAYER                                   │
+│              (Jinja2 Templates / HTML)                          │
+├─────────────────────────────────────────────────────────────────┤
+│                    SERVICE LAYER                                │
+│              (Business Logic / Validations)                     │
+├─────────────────────────────────────────────────────────────────┤
+│                    MODEL LAYER                                  │
+│                  (ORM SQLAlchemy)                               │
+├─────────────────────────────────────────────────────────────────┤
+│                    DATABASE                                     │
+│                       (MySQL)                                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Core Technologies
+
+<CardGroup cols={2}>
+  <Card title="Flask" icon="flask">
+    Web framework providing routing, request handling, and application structure
+  </Card>
+  <Card title="SQLAlchemy" icon="database">
+    ORM for database operations and model definitions
+  </Card>
+  <Card title="Jinja2" icon="file-code">
+    Template engine for rendering dynamic HTML views
+  </Card>
+  <Card title="Flask-WTF" icon="shield-check">
+    Form handling with CSRF protection and validation
+  </Card>
+</CardGroup>
+
+## Application Factory Pattern
+
+The system uses the **Application Factory Pattern** to create and configure the Flask application instance. This pattern allows for flexible configuration and testing.
+
+```python app/__init__.py
+from flask import Flask
+from config import Config
+from .exceptions import register_error_handlers
+from .extensions import csrf, db, migrate
+
+def create_app():
+    """
+    Factory de la aplicación Flask.
+    
+    Crea y configura la instancia de la aplicación Flask,
+    inicializa extensiones y registra blueprints.
+    """
+    # Create Flask application
+    app = Flask(__name__)
+    
+    # Initialize environment variables
+    app.config.from_object(Config)
+    
+    # Initialize extensions
+    db.init_app(app)
+    migrate.init_app(app, db)
+    csrf.init_app(app)
+    
+    # Import models to register them with SQLAlchemy
+    from . import models  # noqa: F401
+    
+    # Register error handlers
+    register_error_handlers(app)
+    
+    # Register blueprints
+    from .catalogs.colors import colors_bp
+    app.register_blueprint(colors_bp, url_prefix='/colors')
+    
+    from .catalogs.roles import roles_bp
+    app.register_blueprint(roles_bp, url_prefix='/roles')
+    
+    from .catalogs.wood_types import woods_types_bp
+    app.register_blueprint(woods_types_bp, url_prefix='/wood-types')
+    
+    return app
+```
+
+<Note>
+The factory pattern allows multiple instances of the application to be created with different configurations, which is especially useful for testing.
+</Note>
+
+## Data Flow Patterns
+
+### GET Request (Read Operation)
+
+```
+Browser → routes.py → services.py → models/ → Database
+                                       ↓
+Browser ← template.html ← routes.py ← services.py ← models/ ← Data
+```
+
+### POST Request (Create Operation)
+
+```
+Browser (Form) → routes.py (receive request.form)
+                    ↓
+              services.py (business validation)
+                    ↓
+              models/ (create entity)
+                    ↓
+              Database (INSERT)
+                    ↓
+              routes.py → flash() + redirect
+                    ↓
+Browser ← Redirect to view (PRG Pattern)
+```
+
+<Tip>
+The system follows the **Post/Redirect/Get (PRG)** pattern to prevent duplicate form submissions.
+</Tip>
+
+## Design Principles
+
+The architecture follows these key design principles:
+
+<AccordionGroup>
+  <Accordion title="Separation of Concerns">
+    Each layer has a single, well-defined responsibility. Views handle presentation, services contain business logic, and models manage data persistence.
+  </Accordion>
+  
+  <Accordion title="Loose Coupling">
+    Layers communicate through well-defined interfaces. Changes in one layer have minimal impact on others.
+  </Accordion>
+  
+  <Accordion title="High Cohesion">
+    Related functionality is grouped together in the same module. Each module is self-contained and focuses on a specific domain.
+  </Accordion>
+  
+  <Accordion title="DRY (Don't Repeat Yourself)">
+    Reusable code is extracted into utilities and shared services to avoid duplication.
+  </Accordion>
+  
+  <Accordion title="Fail Fast">
+    Validation happens early in the request lifecycle with clear error messages to improve debugging and user experience.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="MVC Layers" icon="layer-group" href="/architecture/mvc-layers">
+    Learn about the presentation, service, and model layers
+  </Card>
+  <Card title="Module Organization" icon="folder-tree" href="/architecture/modules">
+    Understand how modules are structured and organized
+  </Card>
+  <Card title="Database Models" icon="database" href="/architecture/database/models">
+    Explore the data models and their relationships
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/architecture/error-handling">
+    Learn about the exception hierarchy and error management
+  </Card>
+</CardGroup>

@@ -1,0 +1,496 @@
+---
+title: "Environment Variables Reference"
+description: "Complete guide to environment variables used in the Muebles Roble application"
+---
+
+## Overview
+
+The Muebles Roble application uses environment variables for configuration management, loaded from a `.env` file using `python-dotenv`.
+
+<Info>
+  Environment variables allow you to configure the application without hardcoding values, making it easy to switch between development, testing, and production environments.
+</Info>
+
+## Environment File Setup
+
+### Creating the .env File
+
+1. Copy the template:
+
+```bash
+cp .env-template .env
+```
+
+2. Edit `.env` with your configuration
+
+<Warning>
+  **Never commit `.env` to version control.** It's already included in `.gitignore`.
+</Warning>
+
+### Template File
+
+The `.env-template` provides a reference:
+
+```bash .env-template
+FLASK_APP=app.py
+FLASK_ENV=development
+
+DB_USER=example_user
+DB_PASSWORD=example_password
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=example_db
+```
+
+## Configuration Variables
+
+### Flask Configuration
+
+#### FLASK_APP
+
+<ParamField path="FLASK_APP" type="string" default="app.py">
+  Specifies the application entry point for Flask CLI commands.
+  
+  ```bash
+  FLASK_APP=app.py
+  ```
+</ParamField>
+
+#### FLASK_ENV
+
+<ParamField path="FLASK_ENV" type="string" default="development">
+  Sets the Flask environment mode.
+  
+  **Options:**
+  - `development` - Enable debug mode, auto-reload
+  - `production` - Disable debug, optimize for performance
+  
+  ```bash
+  # Development
+  FLASK_ENV=development
+  
+  # Production
+  FLASK_ENV=production
+  ```
+</ParamField>
+
+<Warning>
+  **Never use `FLASK_ENV=development` in production.** It exposes debugging information and is a security risk.
+</Warning>
+
+### Database Configuration
+
+#### DB_USER
+
+<ParamField path="DB_USER" type="string" required>
+  MySQL database username.
+  
+  ```bash
+  DB_USER=muebles_user
+  ```
+</ParamField>
+
+#### DB_PASSWORD
+
+<ParamField path="DB_PASSWORD" type="string" required>
+  MySQL database password.
+  
+  ```bash
+  DB_PASSWORD=secure_password_here
+  ```
+  
+  <Tip>
+    Use strong passwords in production. Consider using a password manager.
+  </Tip>
+</ParamField>
+
+#### DB_HOST
+
+<ParamField path="DB_HOST" type="string" default="localhost">
+  MySQL server hostname or IP address.
+  
+  ```bash
+  # Local development
+  DB_HOST=localhost
+  
+  # Remote server
+  DB_HOST=192.168.1.100
+  
+  # Cloud database
+  DB_HOST=mysql.example.com
+  ```
+</ParamField>
+
+#### DB_PORT
+
+<ParamField path="DB_PORT" type="integer" default="3306">
+  MySQL server port.
+  
+  ```bash
+  DB_PORT=3306
+  ```
+</ParamField>
+
+#### DB_NAME
+
+<ParamField path="DB_NAME" type="string" required>
+  MySQL database name.
+  
+  ```bash
+  DB_NAME=muebles_roble_db
+  ```
+</ParamField>
+
+### Security Configuration
+
+#### SECRET_KEY
+
+<ParamField path="SECRET_KEY" type="string" required="production">
+  Secret key for session management and CSRF protection.
+  
+  **Critical for:**
+  - Session encryption
+  - CSRF token generation
+  - Cookie signing
+  
+  ```bash
+  SECRET_KEY=your-very-secure-random-secret-key-here
+  ```
+</ParamField>
+
+<Warning>
+  The application **requires** `SECRET_KEY` in production and will raise an error if not set.
+</Warning>
+
+### Generating a Secure SECRET_KEY
+
+Generate a cryptographically secure key:
+
+<CodeGroup>
+
+```python Python
+import secrets
+print(secrets.token_hex(32))
+```
+
+```bash Command Line
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+</CodeGroup>
+
+Example output:
+```
+9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08
+```
+
+## Configuration Loading
+
+### How Config is Loaded
+
+The application loads configuration in `config.py`:
+
+```python config.py
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+class Config:
+    # Database configuration
+    DB_USER = os.getenv("DB_USER")
+    DB_PASSWORD = os.getenv("DB_PASSWORD")
+    DB_HOST = os.getenv("DB_HOST")
+    DB_PORT = os.getenv("DB_PORT")
+    DB_NAME = os.getenv("DB_NAME")
+
+    # Build database URI
+    SQLALCHEMY_DATABASE_URI = (
+        f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    )
+
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    # SECRET_KEY is required for session management and CSRF protection
+    SECRET_KEY = os.getenv("SECRET_KEY")
+    if not SECRET_KEY:
+        # Only allow default in development
+        if os.getenv("FLASK_ENV") == "production":
+            raise ValueError("SECRET_KEY must be set in production environment")
+        SECRET_KEY = "dev-secret-key-change-in-production"
+```
+
+### Loading Order
+
+<Steps>
+  <Step title="Load .env file">
+    `load_dotenv()` reads `.env` file and loads variables
+  </Step>
+  
+  <Step title="Access with os.getenv()">
+    Variables are accessed using `os.getenv("VAR_NAME")`
+  </Step>
+  
+  <Step title="Build config values">
+    Config class builds database URI and other settings
+  </Step>
+  
+  <Step title="Validate production">
+    Raises error if `SECRET_KEY` missing in production
+  </Step>
+</Steps>
+
+## Environment-Specific Configurations
+
+### Development Environment
+
+```bash .env (development)
+FLASK_APP=app.py
+FLASK_ENV=development
+
+# Local database
+DB_USER=dev_user
+DB_PASSWORD=dev_password
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=muebles_roble_dev
+
+# Optional in development (auto-generated)
+# SECRET_KEY=dev-secret-key
+```
+
+### Production Environment
+
+```bash .env (production)
+FLASK_APP=app.py
+FLASK_ENV=production
+
+# Production database
+DB_USER=prod_user
+DB_PASSWORD=very_strong_production_password
+DB_HOST=prod-mysql-server.example.com
+DB_PORT=3306
+DB_NAME=muebles_roble_production
+
+# REQUIRED in production
+SECRET_KEY=9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08
+```
+
+<Warning>
+  **Production checklist:**
+  - [ ] `FLASK_ENV=production`
+  - [ ] Strong `SECRET_KEY` set
+  - [ ] Strong database password
+  - [ ] `.env` file not committed to version control
+</Warning>
+
+## Database URI Construction
+
+The database URI is automatically constructed from environment variables:
+
+```
+mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}
+```
+
+### Example URIs
+
+```bash
+# Development
+mysql+pymysql://dev_user:dev_password@localhost:3306/muebles_roble_dev
+
+# Production
+mysql+pymysql://prod_user:strong_password@prod-server:3306/muebles_roble_prod
+```
+
+## SQLAlchemy Configuration
+
+### SQLALCHEMY_DATABASE_URI
+
+Automatically built from database environment variables (see above).
+
+### SQLALCHEMY_TRACK_MODIFICATIONS
+
+```python
+SQLALCHEMY_TRACK_MODIFICATIONS = False
+```
+
+Disables Flask-SQLAlchemy event system (not needed and saves resources).
+
+## Accessing Environment Variables
+
+### In Python Code
+
+```python
+import os
+
+# Get environment variable
+db_user = os.getenv("DB_USER")
+
+# With default value
+db_port = os.getenv("DB_PORT", "3306")
+
+# Required variable (raises error if not set)
+db_user = os.environ["DB_USER"]
+```
+
+### In Application Config
+
+Variables are accessed through the `Config` class:
+
+```python
+from config import Config
+
+app.config.from_object(Config)
+
+# Access in application
+db_uri = app.config['SQLALCHEMY_DATABASE_URI']
+secret = app.config['SECRET_KEY']
+```
+
+## Environment Variable Best Practices
+
+<AccordionGroup>
+  <Accordion title="Never commit .env files">
+    Always add `.env` to `.gitignore`:
+    
+    ```bash .gitignore
+    .env
+    .env.local
+    .env.*.local
+    ```
+  </Accordion>
+  
+  <Accordion title="Use .env-template for documentation">
+    Keep `.env-template` updated with all required variables:
+    
+    ```bash .env-template
+    FLASK_APP=app.py
+    FLASK_ENV=development
+    DB_USER=example_user
+    # ... all variables with example values
+    ```
+  </Accordion>
+  
+  <Accordion title="Use strong secrets in production">
+    Generate cryptographically secure keys:
+    
+    ```python
+    import secrets
+    secrets.token_hex(32)
+    ```
+  </Accordion>
+  
+  <Accordion title="Validate required variables">
+    Check for required variables at startup:
+    
+    ```python
+    if not SECRET_KEY and FLASK_ENV == "production":
+        raise ValueError("SECRET_KEY required in production")
+    ```
+  </Accordion>
+  
+  <Accordion title="Document all variables">
+    Comment your `.env-template` file:
+    
+    ```bash
+    # Flask application entry point
+    FLASK_APP=app.py
+    
+    # Environment: development or production
+    FLASK_ENV=development
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+### Common Issues
+
+<AccordionGroup>
+  <Accordion title="SECRET_KEY must be set error">
+    **Error:** `ValueError: SECRET_KEY must be set in production environment`
+    
+    **Solution:** Add `SECRET_KEY` to your `.env` file:
+    ```bash
+    SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
+    echo "SECRET_KEY=$SECRET_KEY" >> .env
+    ```
+  </Accordion>
+  
+  <Accordion title="Database connection failed">
+    **Error:** Can't connect to MySQL server
+    
+    **Check:**
+    - Verify `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` in `.env`
+    - Ensure MySQL is running: `sudo systemctl status mysql`
+    - Test connection: `mysql -h $DB_HOST -u $DB_USER -p`
+    - Check firewall rules
+  </Accordion>
+  
+  <Accordion title="Environment variables not loading">
+    **Problem:** Variables from `.env` not available
+    
+    **Solutions:**
+    - Ensure `.env` file is in project root
+    - Check file is named exactly `.env` (not `.env.txt`)
+    - Verify `load_dotenv()` is called in `config.py`
+    - Restart the application
+  </Accordion>
+  
+  <Accordion title="Wrong database selected">
+    **Problem:** Using wrong database (dev vs prod)
+    
+    **Solution:** Check `FLASK_ENV` and `DB_NAME`:
+    ```bash
+    echo $FLASK_ENV
+    echo $DB_NAME
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Quick Reference
+
+### Required Variables
+
+| Variable      | Required | Default      | Description                    |
+|---------------|----------|--------------|--------------------------------|
+| `DB_USER`     | Yes      | -            | Database username              |
+| `DB_PASSWORD` | Yes      | -            | Database password              |
+| `DB_HOST`     | Yes      | -            | Database host                  |
+| `DB_PORT`     | Yes      | -            | Database port                  |
+| `DB_NAME`     | Yes      | -            | Database name                  |
+| `SECRET_KEY`  | Prod     | dev-key      | Secret key for sessions        |
+| `FLASK_APP`   | No       | `app.py`     | Application entry point        |
+| `FLASK_ENV`   | No       | `development`| Environment mode               |
+
+### Example .env File
+
+```bash .env
+FLASK_APP=app.py
+FLASK_ENV=development
+
+DB_USER=muebles_user
+DB_PASSWORD=secure_password
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=muebles_roble_db
+
+SECRET_KEY=your-secret-key-here
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Setup Guide" icon="rocket" href="/development/setup">
+    Complete environment setup instructions
+  </Card>
+  <Card title="Deployment" icon="server" href="/development/deployment">
+    Deploy to production
+  </Card>
+  <Card title="Project Structure" icon="folder-tree" href="/development/project-structure">
+    Understand the application architecture
+  </Card>
+  <Card title="Coding Conventions" icon="code" href="/development/coding-conventions">
+    Follow best practices
+  </Card>
+</CardGroup>

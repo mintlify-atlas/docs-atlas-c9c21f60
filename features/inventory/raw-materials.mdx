@@ -1,0 +1,362 @@
+---
+title: Raw Materials Inventory
+description: Track and manage wood materials and supplies for furniture production
+---
+
+## Overview
+
+The Raw Materials Inventory module manages the stock of materials used in furniture manufacturing, including different types of wood, hardware, finishes, and other supplies.
+
+<Info>
+This feature is planned for future implementation based on the catalog foundation already in place.
+</Info>
+
+## Purpose
+
+Raw materials inventory provides:
+
+- Real-time tracking of material stock levels
+- Wood type classification using the [Wood Types catalog](/features/catalogs/wood-types)
+- Measurement using [Units of Measure](/features/catalogs/units-of-measure)
+- Material cost tracking and valuation
+- Low stock alerts and reorder points
+- Material traceability from receipt to production
+
+## Planned Architecture
+
+The raw materials module will follow the established three-layer pattern:
+
+```
+┌─────────────────────────────────────┐
+│  app/inventory/raw_materials/       │
+├─────────────────────────────────────┤
+│  routes.py                          │
+│  - List materials                   │
+│  - Add material receipt             │
+│  - Update stock                     │
+│  - View material details            │
+├─────────────────────────────────────┤
+│  services.py                        │
+│  - Stock calculations               │
+│  - Material valuation (FIFO/LIFO)   │
+│  - Low stock alerts                 │
+├─────────────────────────────────────┤
+│  models/                            │
+│  - RawMaterial                      │
+│  - MaterialReceipt                  │
+│  - StockMovement                    │
+└─────────────────────────────────────┘
+```
+
+## Data Model Design
+
+### RawMaterial Model
+
+The proposed `RawMaterial` model will include:
+
+```python
+class RawMaterial(db.Model):
+    __tablename__ = 'raw_materials'
+    
+    id_material = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.String(255), nullable=True)
+    
+    # Foreign keys to catalogs
+    wood_type_id = db.Column(db.Integer, db.ForeignKey('wood_types.id_wood_type'))
+    unit_of_measure_id = db.Column(db.Integer, db.ForeignKey('unit_of_measures.id_unit_of_measure'))
+    
+    # Stock information
+    quantity_in_stock = db.Column(db.Numeric(10, 2), default=0.00)
+    minimum_stock = db.Column(db.Numeric(10, 2), default=0.00)
+    reorder_point = db.Column(db.Numeric(10, 2), default=0.00)
+    
+    # Cost tracking
+    unit_cost = db.Column(db.Numeric(10, 2), nullable=True)
+    
+    # Standard audit fields
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.TIMESTAMP, server_default=func.current_timestamp())
+    updated_at = db.Column(db.TIMESTAMP, server_onupdate=func.current_timestamp())
+    deleted_at = db.Column(db.TIMESTAMP, nullable=True)
+    
+    # Relationships
+    wood_type = db.relationship('WoodType', backref='materials')
+    unit_of_measure = db.relationship('UnitOfMeasure', backref='materials')
+```
+
+### MaterialReceipt Model
+
+Tracks incoming material shipments:
+
+```python
+class MaterialReceipt(db.Model):
+    __tablename__ = 'material_receipts'
+    
+    id_receipt = db.Column(db.Integer, primary_key=True)
+    receipt_date = db.Column(db.Date, nullable=False)
+    material_id = db.Column(db.Integer, db.ForeignKey('raw_materials.id_material'))
+    
+    quantity_received = db.Column(db.Numeric(10, 2), nullable=False)
+    unit_cost = db.Column(db.Numeric(10, 2), nullable=False)
+    total_cost = db.Column(db.Numeric(10, 2), nullable=False)
+    
+    supplier_name = db.Column(db.String(100), nullable=True)
+    invoice_number = db.Column(db.String(50), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    
+    created_at = db.Column(db.TIMESTAMP, server_default=func.current_timestamp())
+    created_by = db.Column(db.String(100), nullable=True)
+    
+    # Relationships
+    material = db.relationship('RawMaterial', backref='receipts')
+```
+
+### StockMovement Model
+
+Tracks all inventory movements:
+
+```python
+class StockMovement(db.Model):
+    __tablename__ = 'stock_movements'
+    
+    id_movement = db.Column(db.Integer, primary_key=True)
+    movement_date = db.Column(db.DateTime, server_default=func.current_timestamp())
+    material_id = db.Column(db.Integer, db.ForeignKey('raw_materials.id_material'))
+    
+    movement_type = db.Column(db.String(20), nullable=False)  # IN, OUT, ADJUSTMENT
+    quantity = db.Column(db.Numeric(10, 2), nullable=False)
+    
+    reference_type = db.Column(db.String(50), nullable=True)  # RECEIPT, PRODUCTION, ADJUSTMENT
+    reference_id = db.Column(db.Integer, nullable=True)
+    
+    notes = db.Column(db.Text, nullable=True)
+    created_by = db.Column(db.String(100), nullable=True)
+    
+    # Relationships
+    material = db.relationship('RawMaterial', backref='movements')
+```
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Stock Tracking" icon="boxes-stacked">
+    Real-time visibility of material quantities and locations
+  </Card>
+  <Card title="Material Receipts" icon="truck">
+    Record incoming shipments with cost and supplier details
+  </Card>
+  <Card title="Low Stock Alerts" icon="triangle-exclamation">
+    Automatic notifications when stock reaches reorder points
+  </Card>
+  <Card title="Cost Valuation" icon="dollar-sign">
+    Track material costs using FIFO or average cost methods
+  </Card>
+</CardGroup>
+
+## Planned Service Methods
+
+### RawMaterialService
+
+```python
+class RawMaterialService:
+    @staticmethod
+    def get_all_in_stock() -> list[RawMaterial]:
+        """Get all materials with stock > 0."""
+        return RawMaterial.query.filter(
+            RawMaterial.active == True,
+            RawMaterial.quantity_in_stock > 0
+        ).all()
+    
+    @staticmethod
+    def get_low_stock_items() -> list[RawMaterial]:
+        """Get materials below reorder point."""
+        return RawMaterial.query.filter(
+            RawMaterial.active == True,
+            RawMaterial.quantity_in_stock <= RawMaterial.reorder_point
+        ).all()
+    
+    @staticmethod
+    def create(data: dict) -> dict:
+        """Create a new raw material entry."""
+        # Validation and creation logic
+        pass
+    
+    @staticmethod
+    def update_stock(material_id: int, quantity: float, movement_type: str) -> None:
+        """Update stock levels and record movement."""
+        # Stock update and movement recording logic
+        pass
+    
+    @staticmethod
+    def get_stock_value() -> float:
+        """Calculate total inventory value."""
+        # Sum of (quantity * unit_cost) for all materials
+        pass
+```
+
+### MaterialReceiptService
+
+```python
+class MaterialReceiptService:
+    @staticmethod
+    def record_receipt(data: dict) -> dict:
+        """Record incoming material shipment."""
+        # Creates receipt record
+        # Updates material stock
+        # Creates stock movement record
+        pass
+    
+    @staticmethod
+    def get_receipts_by_date_range(start_date, end_date) -> list[MaterialReceipt]:
+        """Get all receipts within date range."""
+        pass
+    
+    @staticmethod
+    def get_receipts_by_material(material_id: int) -> list[MaterialReceipt]:
+        """Get all receipts for specific material."""
+        pass
+```
+
+## Planned Routes
+
+### Material Management
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/inventory/raw-materials/` | GET | List all materials |
+| `/inventory/raw-materials/create` | GET/POST | Add new material |
+| `/inventory/raw-materials/<id>/edit` | GET/POST | Edit material details |
+| `/inventory/raw-materials/<id>` | GET | View material details |
+| `/inventory/raw-materials/low-stock` | GET | View low stock items |
+
+### Receipt Management
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/inventory/receipts/` | GET | List recent receipts |
+| `/inventory/receipts/create` | GET/POST | Record new receipt |
+| `/inventory/receipts/<id>` | GET | View receipt details |
+
+### Stock Movements
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/inventory/movements/` | GET | List all movements |
+| `/inventory/movements/create` | GET/POST | Record manual adjustment |
+| `/inventory/movements/material/<id>` | GET | View material movement history |
+
+## Integration with Production
+
+Raw materials inventory integrates with the [Production Workflow](/features/production/workflow):
+
+<Steps>
+  <Step title="Material Selection">
+    Production orders specify required materials from inventory
+  </Step>
+  <Step title="Stock Allocation">
+    Materials are reserved when production begins
+  </Step>
+  <Step title="Consumption Tracking">
+    Stock is reduced as materials are consumed
+  </Step>
+  <Step title="Waste Recording">
+    Material waste is tracked for cost accounting
+  </Step>
+</Steps>
+
+## Example Workflow
+
+### Recording a Material Receipt
+
+```python
+# User receives shipment of Oak plywood
+receipt_data = {
+    "receipt_date": "2024-03-15",
+    "material_id": 5,  # Oak Plywood
+    "quantity_received": 100.00,
+    "unit_cost": 45.50,
+    "total_cost": 4550.00,
+    "supplier_name": "Wood Suppliers Inc.",
+    "invoice_number": "INV-2024-0315"
+}
+
+# Service handles:
+# 1. Create receipt record
+# 2. Update material stock (+100.00)
+# 3. Create stock movement (IN)
+# 4. Update material unit_cost (if using average cost)
+result = MaterialReceiptService.record_receipt(receipt_data)
+```
+
+### Checking Low Stock
+
+```python
+# Get materials below reorder point
+low_stock = RawMaterialService.get_low_stock_items()
+
+for material in low_stock:
+    print(f"ALERT: {material.name}")
+    print(f"  Current: {material.quantity_in_stock} {material.unit_of_measure.abbreviation}")
+    print(f"  Reorder at: {material.reorder_point}")
+    print(f"  Minimum: {material.minimum_stock}")
+```
+
+## Best Practices
+
+<Accordion title="Setting Reorder Points">
+  Calculate reorder points based on:
+  - Average daily usage
+  - Supplier lead time
+  - Safety stock buffer
+  
+  Formula: `Reorder Point = (Daily Usage × Lead Time) + Safety Stock`
+</Accordion>
+
+<Accordion title="Cost Accounting Methods">
+  Choose an inventory valuation method:
+  
+  **FIFO (First In, First Out)**
+  - Materials used in order received
+  - Better for perishable items
+  - Reflects current market prices
+  
+  **Average Cost**
+  - Simpler to calculate
+  - Smooths price fluctuations
+  - Good for commodities
+</Accordion>
+
+<Accordion title="Stock Count Procedures">
+  Regular physical inventory counts:
+  - Monthly cycle counts for high-value items
+  - Annual full inventory count
+  - Record variances as adjustments
+  - Investigate significant discrepancies
+</Accordion>
+
+## Reports and Analytics
+
+Planned reporting capabilities:
+
+<CardGroup cols={2}>
+  <Card title="Stock Status Report">
+    Current quantities, values, and low stock items
+  </Card>
+  <Card title="Material Usage Report">
+    Consumption by material and time period
+  </Card>
+  <Card title="Receipt History">
+    Incoming shipments with costs and suppliers
+  </Card>
+  <Card title="Movement History">
+    All stock changes with reasons and references
+  </Card>
+</CardGroup>
+
+## Related Documentation
+
+- [Wood Types Catalog](/features/catalogs/wood-types) - Material classifications
+- [Units of Measure](/features/catalogs/units-of-measure) - Quantity measurements
+- [Production Workflow](/features/production/workflow) - Material consumption
+- [Finished Products](/features/inventory/finished-products) - Output tracking

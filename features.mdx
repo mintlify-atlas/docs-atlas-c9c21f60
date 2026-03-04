@@ -1,0 +1,516 @@
+---
+title: Key Features
+description: Comprehensive overview of Muebles Roble's catalog management, inventory tracking, production control, and audit capabilities
+---
+
+# Key Features
+
+Muebles Roble provides a complete suite of features designed specifically for furniture manufacturing operations. Built on Flask with a layered architecture, the system offers robust catalog management, inventory control, and production tracking.
+
+## Catalog Management
+
+The heart of Muebles Roble is its comprehensive catalog system, managing all reference data used throughout production.
+
+### Available Catalogs
+
+<CardGroup cols={2}>
+  <Card title="Colors" icon="palette">
+    Manage finish colors like Natural, White, Black, Walnut, Mahogany, and custom colors.
+  </Card>
+  
+  <Card title="Wood Types" icon="tree">
+    Track different wood species: Pine, Cedar, Oak, Mahogany, and more with specific properties.
+  </Card>
+  
+  <Card title="Furniture Types" icon="chair">
+    Define product categories: Tables, Chairs, Closets, Shelves, Desks, and custom furniture.
+  </Card>
+  
+  <Card title="Units of Measure" icon="ruler">
+    Manage measurement units: kilograms, square meters, pieces, linear meters, etc.
+  </Card>
+</CardGroup>
+
+### Catalog Operations
+
+Each catalog supports full CRUD operations:
+
+<Steps>
+  <Step title="Create">
+    Add new catalog entries through validated forms with CSRF protection and duplicate detection.
+  </Step>
+  
+  <Step title="Read/List">
+    View all catalog entries with active/inactive status filtering and sorting capabilities.
+  </Step>
+  
+  <Step title="Update">
+    Edit existing entries with pre-populated forms and conflict detection for name uniqueness.
+  </Step>
+  
+  <Step title="Delete (Soft)">
+    Logical deletion that preserves data for audit purposes while marking records inactive.
+  </Step>
+</Steps>
+
+### Example: Color Catalog
+
+Here's how the color catalog is implemented:
+
+```python
+# Model: app/models/color.py
+class Color(db.Model):
+    __tablename__ = 'colors'
+    
+    id_color = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False, unique=True)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+    
+    # Audit fields
+    created_at = db.Column(db.TIMESTAMP, server_default=func.current_timestamp())
+    updated_at = db.Column(db.TIMESTAMP, server_onupdate=func.current_timestamp())
+    deleted_at = db.Column(db.TIMESTAMP, nullable=True)
+    
+    created_by = db.Column(db.String(100))
+    updated_by = db.Column(db.String(100))
+    deleted_by = db.Column(db.String(100))
+```
+
+<Info>
+  All catalog models follow this same structure, ensuring consistency across the application.
+</Info>
+
+## Form Handling & Validation
+
+The system uses **Flask-WTF** for robust form handling with multiple validation layers.
+
+### Multi-Layer Validation
+
+<Accordion title="1. Client-Side Validation">
+  HTML5 form attributes provide immediate feedback:
+  ```html
+  <input type="text" name="name" required minlength="2" maxlength="50">
+  ```
+</Accordion>
+
+<Accordion title="2. Form-Level Validation">
+  WTForms validators ensure data quality:
+  ```python
+  # app/catalogs/colors/forms.py
+  from flask_wtf import FlaskForm
+  from wtforms import StringField
+  from wtforms.validators import DataRequired, Length
+  
+  class ColorForm(FlaskForm):
+      name = StringField(
+          'Color Name',
+          validators=[
+              DataRequired(message='Color name is required'),
+              Length(min=2, max=50, message='Name must be 2-50 characters')
+          ]
+      )
+  ```
+</Accordion>
+
+<Accordion title="3. Business Logic Validation">
+  Service layer enforces business rules:
+  ```python
+  # app/catalogs/colors/services.py
+  @staticmethod
+  def create(data: dict) -> dict:
+      name = data.get('name')
+      if not name or not name.strip():
+          raise ValidationError('Color name is required')
+      
+      # Check for duplicates
+      existing = Color.query.filter_by(name=name.strip()).first()
+      if existing:
+          raise ConflictError(f"Color '{name}' already exists")
+      
+      color = Color(name=name.strip())
+      db.session.add(color)
+      db.session.commit()
+      return color.to_dict()
+  ```
+</Accordion>
+
+<Accordion title="4. Database-Level Constraints">
+  Database enforces final integrity:
+  ```python
+  name = db.Column(db.String(50), nullable=False, unique=True)
+  ```
+</Accordion>
+
+### CSRF Protection
+
+All forms are automatically protected against Cross-Site Request Forgery attacks:
+
+```html
+<!-- templates/colors/create.html -->
+<form method="POST" action="{{ url_for('colors.create_color') }}">
+    {{ form.hidden_tag() }}  <!-- CSRF token -->
+    
+    {{ form.name.label }}
+    {{ form.name }}
+    
+    <button type="submit">Create Color</button>
+</form>
+```
+
+<Warning>
+  The `form.hidden_tag()` is required in every form to include the CSRF token. Forms without it will be rejected.
+</Warning>
+
+## Request Flow & Architecture
+
+The layered architecture ensures clean separation of concerns:
+
+### Creating a New Color
+
+<Steps>
+  <Step title="Route Receives Request">
+    ```python
+    # app/catalogs/colors/routes.py
+    @colors_bp.route("/create", methods=["GET", "POST"])
+    def create_color():
+        form = ColorForm()
+        
+        if form.validate_on_submit():
+            data = {"name": form.name.data}
+            try:
+                ColorService.create(data)
+                flash("Color created successfully", "success")
+                return redirect(url_for("colors.create_color"))
+            except ConflictError as e:
+                flash(e.message, "error")
+        
+        return render_template("colors/create.html", form=form)
+    ```
+  </Step>
+  
+  <Step title="Service Applies Business Logic">
+    The service validates business rules, checks for duplicates, and manages the transaction.
+  </Step>
+  
+  <Step title="Model Persists Data">
+    SQLAlchemy ORM creates the database record with automatic timestamp and audit field population.
+  </Step>
+  
+  <Step title="Template Renders Result">
+    Jinja2 template displays success message and either shows the form again or redirects.
+  </Step>
+</Steps>
+
+### Updating an Existing Color
+
+```python
+# app/catalogs/colors/routes.py
+@colors_bp.route("/<int:id_color>/edit", methods=["GET", "POST"])
+def edit_color(id_color: int):
+    try:
+        color = ColorService.get_by_id(id_color)
+    except NotFoundError as e:
+        flash(e.message, "error")
+        return redirect(url_for("colors.list_colors"))
+    
+    form = ColorForm()
+    
+    if form.validate_on_submit():
+        data = {"name": form.name.data}
+        try:
+            ColorService.update(id_color, data)
+            flash("Color updated successfully", "success")
+            return redirect(url_for("colors.list_colors"))
+        except (ConflictError, ValidationError) as e:
+            flash(e.message, "error")
+    
+    elif request.method == "GET":
+        # Pre-populate form on GET requests
+        form.name.data = color.name
+    
+    return render_template("colors/edit.html", form=form, color=color)
+```
+
+<Note>
+  The system uses the **PRG (Post-Redirect-Get)** pattern to prevent duplicate form submissions.
+</Note>
+
+## Error Handling
+
+Comprehensive error handling with user-friendly messages:
+
+### Exception Hierarchy
+
+```python
+# app/exceptions.py
+class AppException(Exception):
+    """Base exception for all application errors."""
+    def __init__(self, message: str, status_code: int):
+        self.message = message
+        self.status_code = status_code
+
+class ValidationError(AppException):
+    """Raised when input validation fails (400)."""
+    def __init__(self, message: str):
+        super().__init__(message, 400)
+
+class NotFoundError(AppException):
+    """Raised when a resource is not found (404)."""
+    def __init__(self, message: str):
+        super().__init__(message, 404)
+
+class ConflictError(AppException):
+    """Raised when a resource conflict occurs (409)."""
+    def __init__(self, message: str):
+        super().__init__(message, 409)
+```
+
+### Error Flow
+
+<Steps>
+  <Step title="Exception Raised in Service">
+    Business logic detects an issue and raises a specific exception:
+    ```python
+    if existing:
+        raise ConflictError(f"Color '{name}' already exists")
+    ```
+  </Step>
+  
+  <Step title="Caught in Route">
+    The route catches the exception and displays a user-friendly message:
+    ```python
+    try:
+        ColorService.create(data)
+        flash("Color created successfully", "success")
+    except ConflictError as e:
+        flash(e.message, "error")
+    ```
+  </Step>
+  
+  <Step title="Displayed in Template">
+    Flash messages appear in the UI with appropriate styling (success/error).
+  </Step>
+</Steps>
+
+## Database Features
+
+### MySQL with SQLAlchemy ORM
+
+The system uses MySQL as the database with SQLAlchemy ORM for object-relational mapping:
+
+```python
+# config.py
+SQLALCHEMY_DATABASE_URI = (
+    f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+)
+```
+
+### Connection Management
+
+```python
+# run.py - Database connection test
+with app.app_context():
+    try:
+        connection = db.engine.connect()
+        print("Database connection successful!")
+        connection.close()
+    except Exception as e:
+        print(f"Database connection failed: {e}")
+```
+
+### Migrations with Flask-Migrate
+
+Database schema changes are managed through Alembic migrations:
+
+```bash
+# Create a new migration
+flask db migrate -m "Add new column to colors table"
+
+# Apply migrations
+flask db upgrade
+
+# Rollback migrations
+flask db downgrade
+```
+
+## Audit Trail & Compliance
+
+Every record includes comprehensive audit information:
+
+### Audit Fields
+
+| Field | Type | Purpose |
+|-------|------|--------|
+| `created_at` | TIMESTAMP | When the record was created (auto-populated) |
+| `updated_at` | TIMESTAMP | When the record was last modified (auto-updated) |
+| `deleted_at` | TIMESTAMP | When the record was soft-deleted (nullable) |
+| `created_by` | VARCHAR(100) | User who created the record |
+| `updated_by` | VARCHAR(100) | User who last updated the record |
+| `deleted_by` | VARCHAR(100) | User who deleted the record |
+| `active` | BOOLEAN | Whether the record is active (soft delete flag) |
+
+### Soft Delete Pattern
+
+```python
+# Soft delete in service layer
+@staticmethod
+def delete(id_color: int) -> None:
+    color = Color.query.get(id_color)
+    if not color:
+        raise NotFoundError(f"Color with ID {id_color} not found")
+    
+    # Mark as inactive instead of deleting
+    color.active = False
+    color.deleted_at = func.current_timestamp()
+    # color.deleted_by = current_user.username  # When auth is implemented
+    
+    db.session.commit()
+```
+
+<Info>
+  Soft deletes preserve data integrity and allow for audit trails and potential data recovery.
+</Info>
+
+## Security Features
+
+### Environment-Based Configuration
+
+Sensitive data is stored in environment variables, never in code:
+
+```python
+# config.py
+class Config:
+    DB_USER = os.getenv("DB_USER")
+    DB_PASSWORD = os.getenv("DB_PASSWORD")
+    DB_HOST = os.getenv("DB_HOST")
+    DB_PORT = os.getenv("DB_PORT")
+    DB_NAME = os.getenv("DB_NAME")
+    
+    SECRET_KEY = os.getenv("SECRET_KEY")
+    if not SECRET_KEY:
+        if os.getenv("FLASK_ENV") == "production":
+            raise ValueError("SECRET_KEY must be set in production")
+        SECRET_KEY = "dev-secret-key-change-in-production"
+```
+
+<Warning>
+  In production, the SECRET_KEY environment variable MUST be set, or the application will refuse to start.
+</Warning>
+
+### SQL Injection Prevention
+
+SQLAlchemy ORM uses parameterized queries automatically:
+
+```python
+# Safe from SQL injection
+color = Color.query.filter_by(name=user_input).first()
+
+# SQLAlchemy generates: SELECT * FROM colors WHERE name = ?
+# With user_input properly escaped
+```
+
+## Blueprint Organization
+
+The application uses Flask Blueprints for modular organization:
+
+```python
+# app/__init__.py
+def create_app():
+    app = Flask(__name__)
+    
+    # Register blueprints
+    from .catalogs.colors import colors_bp
+    app.register_blueprint(colors_bp, url_prefix='/colors')
+    
+    from .catalogs.wood_types import woods_types_bp
+    app.register_blueprint(woods_types_bp, url_prefix='/wood-types')
+    
+    from .catalogs.unit_of_measures import unit_of_measures_bp
+    app.register_blueprint(unit_of_measures_bp, url_prefix='/unit-of-measures')
+    
+    from .catalogs.roles import roles_bp
+    app.register_blueprint(roles_bp, url_prefix='/roles')
+    
+    return app
+```
+
+### Available Routes
+
+Each blueprint provides RESTful routes:
+
+| Route | Method | Purpose |
+|-------|--------|--------|
+| `/colors/` | GET | List all colors |
+| `/colors/create` | GET, POST | Show form / Create color |
+| `/colors/<id>/edit` | GET, POST | Show form / Update color |
+| `/colors/<id>/delete` | POST | Soft delete color |
+
+<Tip>
+  The same route structure applies to all catalogs: wood-types, unit-of-measures, roles, and furniture-type.
+</Tip>
+
+## Template System
+
+Jinja2 templates with inheritance for consistent UI:
+
+```html
+<!-- templates/base.html - Base template -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <title>{% block title %}Muebles Roble{% endblock %}</title>
+</head>
+<body>
+    <nav>
+        <!-- Navigation menu -->
+    </nav>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>
+```
+
+```html
+<!-- templates/colors/create.html - Child template -->
+{% extends "base.html" %}
+
+{% block title %}Create Color - Muebles Roble{% endblock %}
+
+{% block content %}
+<h1>Create New Color</h1>
+<form method="POST">
+    {{ form.hidden_tag() }}
+    {{ form.name.label }}
+    {{ form.name }}
+    <button type="submit">Create</button>
+</form>
+{% endblock %}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/quickstart/installation">
+    Install Python, create virtual environment, and set up dependencies
+  </Card>
+  
+  <Card title="Configuration" icon="gear" href="/quickstart/configuration">
+    Configure database connection and environment variables
+  </Card>
+  
+  <Card title="First Steps" icon="rocket" href="/quickstart/first-steps">
+    Run the application and create your first catalog entries
+  </Card>
+</CardGroup>

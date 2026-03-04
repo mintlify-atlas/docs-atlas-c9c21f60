@@ -1,0 +1,535 @@
+---
+title: Production Workflow
+description: Manage the furniture manufacturing process from order to completion
+---
+
+## Overview
+
+The Production Workflow module orchestrates the furniture manufacturing process, tracking production orders from creation through material allocation, manufacturing stages, and completion.
+
+<Info>
+This feature is planned for future implementation as part of the complete production management system.
+</Info>
+
+## Purpose
+
+The production workflow provides:
+
+- Production order management
+- Material requirement planning (MRP)
+- Work-in-progress (WIP) tracking
+- Production stage monitoring
+- Resource allocation and scheduling
+- Quality control checkpoints
+- Integration with inventory systems
+
+## Production Process Flow
+
+```
+┌───────────────────────┐
+│  1. Order Creation     │
+│  Define product & qty  │
+└───────────────────────┘
+          │
+          ↓
+┌───────────────────────┐
+│  2. Material Planning  │
+│  Calculate needs       │
+└───────────────────────┘
+          │
+          ↓
+┌───────────────────────┐
+│  3. Material Issuing   │
+│  Allocate from stock   │
+└───────────────────────┘
+          │
+          ↓
+┌───────────────────────┐
+│  4. Manufacturing      │
+│  Production stages     │
+└───────────────────────┘
+          │
+          ↓
+┌───────────────────────┐
+│  5. Quality Control    │
+│  Inspection            │
+└───────────────────────┘
+          │
+          ↓
+┌───────────────────────┐
+│  6. Completion         │
+│  Add to inventory      │
+└───────────────────────┘
+```
+
+## Data Model Design
+
+### ProductionOrder Model
+
+```python
+class ProductionOrder(db.Model):
+    __tablename__ = 'production_orders'
+    
+    id_order = db.Column(db.Integer, primary_key=True)
+    order_number = db.Column(db.String(50), unique=True, nullable=False)
+    order_date = db.Column(db.Date, nullable=False)
+    
+    # Product information
+    product_id = db.Column(db.Integer, db.ForeignKey('finished_products.id_product'))
+    quantity_ordered = db.Column(db.Integer, nullable=False)
+    quantity_completed = db.Column(db.Integer, default=0)
+    
+    # Scheduling
+    start_date = db.Column(db.Date, nullable=True)
+    due_date = db.Column(db.Date, nullable=True)
+    completion_date = db.Column(db.Date, nullable=True)
+    
+    # Status tracking
+    status = db.Column(db.String(20), default='PENDING')
+    # Statuses: PENDING, PLANNED, IN_PROGRESS, COMPLETED, CANCELLED
+    
+    # Assignment
+    assigned_to = db.Column(db.String(100), nullable=True)
+    priority = db.Column(db.Integer, default=5)  # 1-10, 1=highest
+    
+    notes = db.Column(db.Text, nullable=True)
+    
+    created_at = db.Column(db.TIMESTAMP, server_default=func.current_timestamp())
+    created_by = db.Column(db.String(100), nullable=True)
+    
+    # Relationships
+    product = db.relationship('FinishedProduct', backref='production_orders')
+```
+
+### MaterialRequirement Model
+
+Defines materials needed for products:
+
+```python
+class MaterialRequirement(db.Model):
+    __tablename__ = 'material_requirements'
+    
+    id_requirement = db.Column(db.Integer, primary_key=True)
+    
+    product_id = db.Column(db.Integer, db.ForeignKey('finished_products.id_product'))
+    material_id = db.Column(db.Integer, db.ForeignKey('raw_materials.id_material'))
+    
+    quantity_required = db.Column(db.Numeric(10, 2), nullable=False)
+    unit_id = db.Column(db.Integer, db.ForeignKey('unit_of_measures.id_unit_of_measure'))
+    
+    waste_percentage = db.Column(db.Numeric(5, 2), default=0.00)  # Expected waste
+    
+    notes = db.Column(db.Text, nullable=True)
+    
+    # Relationships
+    product = db.relationship('FinishedProduct', backref='material_requirements')
+    material = db.relationship('RawMaterial', backref='required_by_products')
+    unit = db.relationship('UnitOfMeasure')
+```
+
+### MaterialIssue Model
+
+Tracks material allocation to production:
+
+```python
+class MaterialIssue(db.Model):
+    __tablename__ = 'material_issues'
+    
+    id_issue = db.Column(db.Integer, primary_key=True)
+    issue_date = db.Column(db.DateTime, server_default=func.current_timestamp())
+    
+    production_order_id = db.Column(db.Integer, db.ForeignKey('production_orders.id_order'))
+    material_id = db.Column(db.Integer, db.ForeignKey('raw_materials.id_material'))
+    
+    quantity_issued = db.Column(db.Numeric(10, 2), nullable=False)
+    quantity_returned = db.Column(db.Numeric(10, 2), default=0.00)
+    quantity_wasted = db.Column(db.Numeric(10, 2), default=0.00)
+    
+    issued_by = db.Column(db.String(100), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    
+    # Relationships
+    production_order = db.relationship('ProductionOrder', backref='material_issues')
+    material = db.relationship('RawMaterial', backref='issues')
+```
+
+### ProductionStage Model
+
+Tracks progress through manufacturing stages:
+
+```python
+class ProductionStage(db.Model):
+    __tablename__ = 'production_stages'
+    
+    id_stage = db.Column(db.Integer, primary_key=True)
+    production_order_id = db.Column(db.Integer, db.ForeignKey('production_orders.id_order'))
+    
+    stage_name = db.Column(db.String(50), nullable=False)
+    # Examples: CUTTING, ASSEMBLY, SANDING, FINISHING, QC
+    
+    stage_order = db.Column(db.Integer, nullable=False)  # Sequence
+    
+    status = db.Column(db.String(20), default='PENDING')
+    # Statuses: PENDING, IN_PROGRESS, COMPLETED
+    
+    start_time = db.Column(db.DateTime, nullable=True)
+    end_time = db.Column(db.DateTime, nullable=True)
+    
+    worker_name = db.Column(db.String(100), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    
+    # Relationships
+    production_order = db.relationship('ProductionOrder', backref='stages')
+```
+
+## Planned Architecture
+
+```
+app/production/workflow/
+├── routes.py
+│   ├── Create production order
+│   ├── View order status
+│   ├── Update stage progress
+│   └── Complete order
+├── services.py
+│   ├── Order management
+│   ├── Material planning (MRP)
+│   ├── Stock allocation
+│   └── Progress tracking
+└── forms.py
+    ├── ProductionOrderForm
+    ├── MaterialIssueForm
+    └── StageUpdateForm
+```
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Order Management" icon="clipboard-list">
+    Create and track production orders from start to finish
+  </Card>
+  <Card title="Material Planning" icon="boxes">
+    Automatic calculation of material requirements
+  </Card>
+  <Card title="Stage Tracking" icon="list-check">
+    Monitor progress through manufacturing stages
+  </Card>
+  <Card title="Resource Scheduling" icon="calendar">
+    Assign workers and plan production timeline
+  </Card>
+</CardGroup>
+
+## Planned Service Methods
+
+### ProductionOrderService
+
+```python
+class ProductionOrderService:
+    @staticmethod
+    def create_order(data: dict) -> dict:
+        """Create new production order."""
+        # Generates unique order number
+        # Validates product exists
+        # Checks material availability
+        # Creates order record
+        # Initializes production stages
+        pass
+    
+    @staticmethod
+    def get_active_orders() -> list[ProductionOrder]:
+        """Get all non-completed orders."""
+        return ProductionOrder.query.filter(
+            ProductionOrder.status.in_(['PENDING', 'PLANNED', 'IN_PROGRESS'])
+        ).all()
+    
+    @staticmethod
+    def calculate_material_needs(product_id: int, quantity: int) -> dict:
+        """Calculate materials needed for production."""
+        # Gets material requirements for product
+        # Multiplies by quantity
+        # Adds waste percentage
+        # Returns dict of {material_id: quantity_needed}
+        pass
+    
+    @staticmethod
+    def check_material_availability(order_id: int) -> bool:
+        """Verify materials available for order."""
+        # Compares requirements against stock
+        # Returns True if all materials available
+        pass
+    
+    @staticmethod
+    def start_order(order_id: int) -> None:
+        """Begin production on order."""
+        # Updates status to IN_PROGRESS
+        # Sets start_date
+        # Creates material issues
+        pass
+    
+    @staticmethod
+    def complete_order(order_id: int, quantity_completed: int, quantity_defective: int) -> None:
+        """Complete production order."""
+        # Updates order status
+        # Creates ProductionCompletion record
+        # Updates finished product inventory
+        # Records material waste
+        pass
+```
+
+### MaterialIssueService
+
+```python
+class MaterialIssueService:
+    @staticmethod
+    def issue_materials(order_id: int) -> list[dict]:
+        """Issue materials to production order."""
+        # Gets material requirements
+        # Creates issue records
+        # Reduces raw material stock
+        # Creates stock movement records
+        pass
+    
+    @staticmethod
+    def record_waste(issue_id: int, quantity_wasted: float, notes: str) -> None:
+        """Record material waste."""
+        # Updates material issue
+        # Tracks waste for analysis
+        pass
+    
+    @staticmethod
+    def return_unused(issue_id: int, quantity_returned: float) -> None:
+        """Return unused materials to stock."""
+        # Updates issue record
+        # Increases raw material stock
+        # Creates stock movement
+        pass
+```
+
+### ProductionStageService
+
+```python
+class ProductionStageService:
+    @staticmethod
+    def start_stage(stage_id: int, worker_name: str) -> None:
+        """Begin work on production stage."""
+        # Updates status to IN_PROGRESS
+        # Records start_time
+        # Assigns worker
+        pass
+    
+    @staticmethod
+    def complete_stage(stage_id: int, notes: str = None) -> None:
+        """Complete production stage."""
+        # Updates status to COMPLETED
+        # Records end_time
+        # Calculates duration
+        # Starts next stage if applicable
+        pass
+    
+    @staticmethod
+    def get_order_progress(order_id: int) -> dict:
+        """Calculate order completion percentage."""
+        # Counts completed vs total stages
+        # Returns percentage complete
+        pass
+```
+
+## Manufacturing Stages
+
+Typical furniture production stages:
+
+<Steps>
+  <Step title="Material Cutting">
+    Cut wood and materials to required dimensions
+  </Step>
+  <Step title="Component Assembly">
+    Assemble individual furniture components
+  </Step>
+  <Step title="Joining">
+    Join components using fasteners, glue, or joinery
+  </Step>
+  <Step title="Sanding">
+    Sand surfaces to smooth finish
+  </Step>
+  <Step title="Staining/Painting">
+    Apply color finish as specified
+  </Step>
+  <Step title="Finishing">
+    Apply protective coatings (varnish, lacquer, wax)
+  </Step>
+  <Step title="Quality Inspection">
+    Inspect for defects and quality standards
+  </Step>
+  <Step title="Packaging">
+    Prepare for storage or shipment
+  </Step>
+</Steps>
+
+## Example Workflow
+
+### Creating a Production Order
+
+```python
+# Create order for 10 dining tables
+order_data = {
+    "order_number": "PO-2024-0315-001",  # Auto-generated
+    "order_date": "2024-03-15",
+    "product_id": 10,  # Oak Dining Table
+    "quantity_ordered": 10,
+    "due_date": "2024-03-30",
+    "priority": 3,
+    "assigned_to": "Production Team A"
+}
+
+# Service handles:
+# 1. Create order record
+# 2. Calculate material needs (10 tables × requirements)
+# 3. Check material availability
+# 4. Create production stages
+# 5. Set status to PLANNED
+order = ProductionOrderService.create_order(order_data)
+```
+
+### Material Requirements Calculation
+
+```python
+# For Oak Dining Table (product_id=10)
+# Material requirements defined:
+# - Oak Plywood: 2.5 m² per table
+# - Wood Glue: 0.5 L per table
+# - Finish: 0.3 L per table
+
+quantity = 10
+materials = ProductionOrderService.calculate_material_needs(
+    product_id=10,
+    quantity=10
+)
+
+# Returns:
+# {
+#     5: {"material": "Oak Plywood", "needed": 25.0, "unit": "m²", "available": 30.0},
+#     8: {"material": "Wood Glue", "needed": 5.0, "unit": "L", "available": 10.0},
+#     12: {"material": "Finish", "needed": 3.0, "unit": "L", "available": 2.5}
+# }
+# Shows Finish is short by 0.5 L
+```
+
+### Starting Production
+
+```python
+# Start production order
+ProductionOrderService.start_order(order_id=100)
+
+# Service handles:
+# 1. Update status to IN_PROGRESS
+# 2. Set start_date to today
+# 3. Issue materials from stock:
+#    - Oak Plywood: -25.0 m²
+#    - Wood Glue: -5.0 L
+#    - Finish: -3.0 L
+# 4. Create MaterialIssue records
+# 5. Create StockMovement records (OUT)
+```
+
+### Tracking Progress
+
+```python
+# Worker updates stage completion
+ProductionStageService.start_stage(
+    stage_id=1,  # Cutting stage
+    worker_name="Juan Pérez"
+)
+
+# Later...
+ProductionStageService.complete_stage(
+    stage_id=1,
+    notes="All pieces cut to specification"
+)
+
+# Check overall progress
+progress = ProductionStageService.get_order_progress(order_id=100)
+# Returns: {"completed": 1, "total": 7, "percentage": 14.3}
+```
+
+## Integration Points
+
+### With Raw Materials Inventory
+
+<Accordion title="Material Consumption">
+  When production starts:
+  - Materials issued from [Raw Materials Inventory](/features/inventory/raw-materials)
+  - Stock levels reduced automatically
+  - Movement records created for traceability
+  - Waste tracked and recorded
+</Accordion>
+
+### With Finished Products Inventory
+
+<Accordion title="Production Completion">
+  When order completes:
+  - Items added to [Finished Products Inventory](/features/inventory/finished-products)
+  - Stock quantities updated
+  - Quality status recorded
+  - Production costs calculated
+</Accordion>
+
+### With Catalogs
+
+<Accordion title="Reference Data">
+  Production uses catalog data:
+  - [Furniture Types](/features/catalogs/furniture-types) for product classification
+  - [Wood Types](/features/catalogs/wood-types) for material specifications
+  - [Colors](/features/catalogs/colors) for finish requirements
+  - [Units of Measure](/features/catalogs/units-of-measure) for quantities
+</Accordion>
+
+## Reports and Analytics
+
+Planned reporting capabilities:
+
+<CardGroup cols={2}>
+  <Card title="Production Schedule">
+    Active and planned orders by due date
+  </Card>
+  <Card title="Efficiency Report">
+    Time per stage, completion rates, delays
+  </Card>
+  <Card title="Material Usage">
+    Actual vs. planned consumption, waste analysis
+  </Card>
+  <Card title="Worker Performance">
+    Orders completed, stages per worker, quality
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<Accordion title="Order Prioritization">
+  Use priority levels effectively:
+  - 1-3: High priority (rush orders, customer deadlines)
+  - 4-6: Normal priority (standard production)
+  - 7-10: Low priority (stock building, non-urgent)
+</Accordion>
+
+<Accordion title="Material Planning">
+  Best practices for MRP:
+  - Include waste percentage in calculations (typically 5-10%)
+  - Check availability before starting orders
+  - Maintain safety stock of common materials
+  - Plan orders based on material lead times
+</Accordion>
+
+<Accordion title="Stage Tracking">
+  Effective progress monitoring:
+  - Update stages in real-time
+  - Record actual worker time
+  - Note any issues or delays
+  - Use notes field for important details
+</Accordion>
+
+## Related Documentation
+
+- [Production Traceability](/features/production/traceability) - Material tracking
+- [Raw Materials Inventory](/features/inventory/raw-materials) - Material consumption
+- [Finished Products Inventory](/features/inventory/finished-products) - Output tracking
+- [Furniture Types Catalog](/features/catalogs/furniture-types) - Product definitions

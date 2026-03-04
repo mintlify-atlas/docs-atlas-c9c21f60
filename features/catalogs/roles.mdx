@@ -1,0 +1,391 @@
+---
+title: Roles Catalog
+description: Manage user roles and permissions in the Muebles Roble system
+---
+
+## Overview
+
+The Roles catalog manages user role definitions for access control and permissions. Roles define what actions users can perform in the system.
+
+## Data Model
+
+The `Role` model is defined in `app/models/role.py:4`:
+
+```python
+class Role(db.Model):
+    __tablename__ = 'roles'
+    
+    id_role = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False, unique=True)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+    
+    created_at = db.Column(db.TIMESTAMP, server_default=func.current_timestamp())
+    updated_at = db.Column(db.TIMESTAMP, server_onupdate=func.current_timestamp())
+    deleted_at = db.Column(db.TIMESTAMP, nullable=True)
+    
+    created_by = db.Column(db.String(100), nullable=True)
+    updated_by = db.Column(db.String(100), nullable=True)
+    deleted_by = db.Column(db.String(100), nullable=True)
+```
+
+### Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id_role` | Integer | Primary key |
+| `name` | String(50) | Unique role name |
+| `active` | Boolean | Soft delete flag |
+| `created_at` | Timestamp | Record creation date |
+| `updated_at` | Timestamp | Last modification date |
+| `deleted_at` | Timestamp | Logical deletion date |
+
+<Info>
+Roles are currently simple name-based categories. Future enhancements may include granular permission assignments.
+</Info>
+
+## Service Layer
+
+The `RoleService` class in `app/catalogs/roles/services.py:13` provides business logic:
+
+### Get All Roles
+
+Retrieves all active roles:
+
+```python
+roles = RoleService.get_all()
+```
+
+Implementation from `services.py:17`:
+```python
+@staticmethod
+def get_all() -> list[Role]:
+    return Role.query.filter_by(active=True).all()
+```
+
+### Create Role
+
+Creates a new role:
+
+```python
+data = {"name": "Production Manager"}
+role = RoleService.create(data)
+```
+
+Implementation from `services.py:27`:
+```python
+@staticmethod
+def create(data: dict) -> dict:
+    name = data.get("name")
+    
+    if not name or not name.strip():
+        raise ValidationError("El nombre del rol es requerido")
+    
+    name = name.strip()
+    
+    existing = Role.query.filter_by(name=name).first()
+    if existing:
+        raise ConflictError(f"Ya existe un rol con el nombre '{name}'")
+    
+    role = Role(name=name)
+    db.session.add(role)
+    db.session.commit()
+    
+    return role.to_dict()
+```
+
+### Get Role by ID
+
+Retrieves a specific role:
+
+```python
+role = RoleService.get_by_id(id_role)
+```
+
+Implementation from `services.py:64`:
+```python
+@staticmethod
+def get_by_id(id_role: int) -> Role:
+    role = Role.query.get(id_role)
+    if not role:
+        raise NotFoundError(f"No se encontró el rol con ID {id_role}")
+    return role
+```
+
+### Update Role
+
+Updates an existing role:
+
+```python
+data = {"name": "Senior Production Manager"}
+RoleService.update(id_role, data)
+```
+
+Implementation from `services.py:83`:
+```python
+@staticmethod
+def update(id_role: int, data: dict) -> dict:
+    role = RoleService.get_by_id(id_role)
+    
+    name = data.get("name")
+    if not name or not name.strip():
+        raise ValidationError("El nombre del rol es requerido")
+    
+    name = name.strip()
+    
+    existing = Role.query.filter(
+        Role.name == name, 
+        Role.id_role != id_role
+    ).first()
+    if existing:
+        raise ConflictError(f"Ya existe un rol con el nombre '{name}'")
+    
+    role.name = name
+    db.session.commit()
+    
+    return role.to_dict()
+```
+
+### Delete Role
+
+Performs a soft delete:
+
+```python
+RoleService.delete(id_role)
+```
+
+Implementation from `services.py:123`:
+```python
+@staticmethod
+def delete(id_role: int) -> None:
+    role = RoleService.get_by_id(id_role)
+    role.active = False
+    role.deleted_at = func.current_timestamp()
+    db.session.commit()
+```
+
+<Warning>
+Be cautious when deleting roles that may be assigned to active users.
+</Warning>
+
+## Routes
+
+The routes module (`app/catalogs/roles/routes.py`) defines HTTP endpoints:
+
+### List Roles
+
+**Endpoint:** `GET /roles/`
+
+From `routes.py:13`:
+```python
+@roles_bp.route("/", methods=["GET"])
+def list_roles():
+    roles = RoleService.get_all()
+    return render_template("roles/list.html", roles=roles)
+```
+
+### Create Role
+
+**Endpoint:** `GET/POST /roles/create`
+
+From `routes.py:25`:
+```python
+@roles_bp.route("/create", methods=["GET", "POST"])
+def create_role():
+    form = RoleForm()
+    
+    if form.validate_on_submit():
+        data = {"name": form.name.data}
+        try:
+            RoleService.create(data)
+            flash("Rol creado exitosamente", "success")
+            return redirect(url_for("roles.create_role"))
+        except ConflictError as e:
+            flash(e.message, "error")
+    
+    return render_template("roles/create.html", form=form)
+```
+
+### Edit Role
+
+**Endpoint:** `GET/POST /roles/<id_role>/edit`
+
+From `routes.py:51`:
+```python
+@roles_bp.route("/<int:id_role>/edit", methods=["GET", "POST"])
+def edit_role(id_role: int):
+    try:
+        role = RoleService.get_by_id(id_role)
+    except NotFoundError as e:
+        flash(e.message, "error")
+        return redirect(url_for("roles.list_roles"))
+    
+    form = RoleForm()
+    
+    if form.validate_on_submit():
+        data = {"name": form.name.data}
+        try:
+            RoleService.update(id_role, data)
+            flash("Rol actualizado exitosamente", "success")
+            return redirect(url_for("roles.list_roles"))
+        except (ConflictError, ValidationError) as e:
+            flash(e.message, "error")
+    
+    elif request.method == "GET":
+        form.name.data = role.name
+    
+    return render_template("roles/edit.html", form=form, role=role)
+```
+
+### Delete Role
+
+**Endpoint:** `POST /roles/<id_role>/delete`
+
+From `routes.py:87`:
+```python
+@roles_bp.route("/<int:id_role>/delete", methods=["POST"])
+def delete_role(id_role: int):
+    try:
+        RoleService.delete(id_role)
+        flash("Rol eliminado exitosamente", "success")
+    except NotFoundError as e:
+        flash(e.message, "error")
+    
+    return redirect(url_for("roles.list_roles"))
+```
+
+## Form Definition
+
+The `RoleForm` class in `app/catalogs/roles/forms.py:10` defines the input form:
+
+```python
+class RoleForm(FlaskForm):
+    name = StringField(
+        "Nombre",
+        validators=[
+            DataRequired(message="El nombre del rol es requerido"),
+            Length(max=50, message="El nombre no puede exceder 50 caracteres"),
+        ],
+    )
+```
+
+## Usage Examples
+
+### Common Role Definitions
+
+Typical roles in a furniture manufacturing system:
+
+<CardGroup cols={2}>
+  <Card title="Administrative">
+    - Administrator
+    - Manager
+    - Supervisor
+  </Card>
+  <Card title="Operational">
+    - Production Worker
+    - Inventory Clerk
+    - Quality Inspector
+  </Card>
+  <Card title="Sales">
+    - Sales Representative
+    - Customer Service
+  </Card>
+  <Card title="Technical">
+    - System Operator
+    - Viewer (Read-only)
+  </Card>
+</CardGroup>
+
+### Creating Roles
+
+```python
+from app.catalogs.roles.services import RoleService
+
+# Create standard roles
+roles = [
+    {"name": "Administrator"},
+    {"name": "Production Manager"},
+    {"name": "Inventory Manager"},
+    {"name": "Production Worker"},
+    {"name": "Viewer"}
+]
+
+for role_data in roles:
+    try:
+        result = RoleService.create(role_data)
+        print(f"Created role: {result['name']}")
+    except ConflictError:
+        print(f"Role already exists: {role_data['name']}")
+```
+
+### Querying Roles
+
+```python
+# Get all active roles
+roles = RoleService.get_all()
+for role in roles:
+    print(f"Role ID {role.id_role}: {role.name}")
+
+# Get specific role
+role = RoleService.get_by_id(1)
+print(f"Role: {role.name}")
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Use Clear Role Names">
+    Choose descriptive, unambiguous names like "Production Manager" rather than "PM"
+  </Step>
+  <Step title="Plan Role Hierarchy">
+    Consider creating roles that reflect organizational structure
+  </Step>
+  <Step title="Avoid Over-Segmentation">
+    Start with broader roles and refine as needed
+  </Step>
+  <Step title="Document Permissions">
+    Maintain documentation of what each role can access
+  </Step>
+</Steps>
+
+<Accordion title="Role Naming Conventions">
+  - Use Title Case: "Production Manager", not "production manager"
+  - Be specific: "Inventory Manager" vs. "Manager"
+  - Avoid abbreviations: "Administrator" not "Admin"
+  - Use singular: "Worker" not "Workers"
+</Accordion>
+
+<Accordion title="Future Authentication Integration">
+  Roles are designed to integrate with future authentication systems:
+  ```python
+  # Future implementation
+  user = User.query.get(user_id)
+  if user.role.name == "Administrator":
+      # Grant admin access
+      pass
+  ```
+</Accordion>
+
+## Security Considerations
+
+<Warning>
+**Deleting Roles**: Before deleting a role, ensure no users are currently assigned to it. Consider implementing a check:
+
+```python
+# Future implementation
+def delete(id_role: int) -> None:
+    role = RoleService.get_by_id(id_role)
+    
+    # Check if role is in use
+    if role.users.count() > 0:
+        raise ConflictError("Cannot delete role with assigned users")
+    
+    role.active = False
+    role.deleted_at = func.current_timestamp()
+    db.session.commit()
+```
+</Warning>
+
+## Related Documentation
+
+- [Catalogs Overview](/features/catalogs/overview)
+- [Production Workflow](/features/production/workflow) - Roles in production processes

@@ -1,0 +1,400 @@
+---
+title: "Coding Conventions"
+description: "Code style standards and best practices for the Muebles Roble project"
+---
+
+## Code Style
+
+### Python Style Guide
+
+The project follows **PEP 8** as the base style guide and uses **Black** as the automatic code formatter.
+
+<Info>
+  Black is an opinionated formatter that ensures consistent code style across the entire project.
+</Info>
+
+### Using Black
+
+```bash
+# Format all code
+black .
+
+# Check formatting without making changes
+black --check .
+```
+
+### Black Configuration
+
+```toml pyproject.toml
+[tool.black]
+line-length = 100
+target-version = ['py310']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | venv
+  | __pycache__
+  | migrations
+)/
+'''
+```
+
+## Naming Conventions
+
+### Files and Directories
+
+| Type           | Convention | Example           |
+|----------------|------------|-------------------|
+| Python modules | snake_case | `user_service.py` |
+| Directories    | snake_case | `wood_types/`     |
+| Classes        | PascalCase | `ColorService`    |
+
+### Variables and Functions
+
+| Type             | Convention       | Example             |
+|------------------|------------------|---------------------|
+| Variables        | snake_case       | `user_name`         |
+| Functions        | snake_case       | `get_all_colors()`  |
+| Constants        | UPPER_SNAKE_CASE | `MAX_PAGE_SIZE`     |
+| Classes          | PascalCase       | `ColorModel`        |
+| Private methods  | _snake_case      | `_validate_input()` |
+
+### Database Models
+
+Model classes use **PascalCase**, table names use **plural snake_case**:
+
+```python app/models/color.py
+class Color(db.Model):
+    """
+    Model for color catalog.
+    
+    Attributes:
+        id_color: Unique identifier
+        name: Color name
+        active: Active/inactive status
+    """
+    __tablename__ = 'colors'  # Plural, snake_case
+    
+    id_color = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False)
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.TIMESTAMP, server_default=func.current_timestamp())
+```
+
+## Module Structure
+
+### Domain Module Organization
+
+Each domain module follows this structure:
+
+```
+catalogs/
+└── colors/
+    ├── __init__.py      # Blueprint and exports
+    ├── routes.py        # Routes and controllers
+    ├── services.py      # Business logic
+    └── forms.py         # WTForms forms
+
+templates/
+└── colors/
+    ├── list.html        # List view
+    ├── create.html      # Create form
+    └── edit.html        # Edit form
+```
+
+### Blueprint Registration (`__init__.py`)
+
+```python app/catalogs/colors/__init__.py
+"""
+Color management module.
+
+Provides endpoints for color catalog CRUD operations.
+"""
+
+from flask import Blueprint
+
+colors_bp = Blueprint('colors', __name__)
+
+from . import routes  # noqa: E402, F401
+```
+
+### Routes (`routes.py`)
+
+```python app/catalogs/colors/routes.py
+"""
+Routes/Controllers for the colors module.
+"""
+
+from flask import flash, redirect, render_template, url_for
+
+from . import colors_bp
+from .forms import ColorForm
+from .services import ColorService
+from app.exceptions import ConflictError
+
+
+@colors_bp.route('/create', methods=['GET', 'POST'])
+def create_color():
+    """
+    Display form and create a new color.
+    
+    GET: Render the creation form.
+    POST: Validate form, create color, and redirect.
+    
+    Returns:
+        GET - HTML: Page with the creation form
+        POST - Redirect: Redirects with flash message
+    """
+    form = ColorForm()
+
+    if form.validate_on_submit():
+        data = {'name': form.name.data}
+        try:
+            ColorService.create(data)
+            flash('Color created successfully', 'success')
+            return redirect(url_for('colors.create_color'))
+        except ConflictError as e:
+            flash(e.message, 'error')
+
+    return render_template('colors/create.html', form=form)
+```
+
+### Forms (`forms.py`)
+
+```python app/catalogs/colors/forms.py
+"""
+Forms for the colors module.
+"""
+
+from flask_wtf import FlaskForm
+from wtforms import StringField
+from wtforms.validators import DataRequired, Length
+
+
+class ColorForm(FlaskForm):
+    """Form for creating a color."""
+
+    name = StringField(
+        'Name',
+        validators=[
+            DataRequired(message='Color name is required'),
+            Length(max=50, message='Name cannot exceed 50 characters'),
+        ],
+    )
+```
+
+### Services (`services.py`)
+
+```python app/catalogs/colors/services.py
+"""
+Business logic services for colors.
+"""
+
+from app.models.color import Color
+from app.extensions import db
+from app.exceptions import ConflictError, ValidationError
+
+
+class ColorService:
+    """Service for color-related business operations."""
+
+    @staticmethod
+    def create(data: dict) -> dict:
+        """
+        Create a new color.
+        
+        Args:
+            data: Dictionary with color data
+            
+        Returns:
+            dict: Serialized created color
+            
+        Raises:
+            ValidationError: If name is empty
+            ConflictError: If color already exists
+        """
+        name = data.get('name')
+        if not name or not name.strip():
+            raise ValidationError('Color name is required')
+
+        existing = Color.query.filter_by(name=name.strip()).first()
+        if existing:
+            raise ConflictError(f"Color '{name}' already exists")
+
+        color = Color(name=name.strip())
+        db.session.add(color)
+        db.session.commit()
+        return color.to_dict()
+```
+
+## Documentation
+
+### Docstrings
+
+Use **Google Style** docstrings:
+
+```python
+from typing import Optional
+
+def create_color(name: str, hex_code: Optional[str] = None) -> dict:
+    """
+    Create a new color in the catalog.
+    
+    Args:
+        name: Color name (required)
+        hex_code: Hexadecimal color code (optional)
+        
+    Returns:
+        dict: Serialized created color
+        
+    Raises:
+        ValidationError: If name is empty
+        ConflictError: If color already exists
+        
+    Example:
+        >>> create_color("Red", "#FF0000")
+        {'id': 1, 'name': 'Red', 'hex_code': '#FF0000'}
+    """
+    pass
+```
+
+### Type Hints
+
+Always use type hints in function signatures:
+
+```python
+from typing import List, Optional, Dict, Any
+
+
+def get_colors_by_status(is_active: bool = True) -> List[Dict[str, Any]]:
+    """Get colors filtered by status."""
+    pass
+
+
+def find_color(color_id: int) -> Optional[Color]:
+    """Find a color, returns None if not found."""
+    pass
+```
+
+## Routing Conventions
+
+### URL Patterns
+
+| Action     | Method | URL                       | Example            |
+|------------|--------|---------------------------|--------------------|   
+| List       | GET    | `/{resource}/`            | `/colors/`         |
+| Create     | POST   | `/{resource}/`            | `/colors/`         |
+| Detail     | GET    | `/{resource}/{id}`        | `/colors/1`        |
+| Edit       | POST   | `/{resource}/{id}/edit`   | `/colors/1/edit`   |
+| Delete     | POST   | `/{resource}/{id}/delete` | `/colors/1/delete` |
+
+### POST-Redirect-GET (PRG) Pattern
+
+<Warning>
+  Always redirect after a successful POST to prevent form resubmission.
+</Warning>
+
+```python
+if form.validate_on_submit():
+    ColorService.create(data)
+    flash('Color created successfully', 'success')
+    return redirect(url_for('colors.list_colors'))  # PRG pattern
+
+return render_template('colors/create.html', form=form)
+```
+
+## Import Organization
+
+Order imports in three groups:
+
+1. Standard library
+2. Third-party packages
+3. Local application imports
+
+```python
+# 1. Standard library
+from datetime import datetime
+from typing import List, Optional
+
+# 2. Third-party packages
+from flask import Blueprint, flash, redirect, render_template, url_for
+from flask_wtf import FlaskForm
+from wtforms import StringField
+from wtforms.validators import DataRequired
+from sqlalchemy import or_, and_
+
+# 3. Local application
+from app.extensions import db, csrf
+from app.models.color import Color
+from app.exceptions import ConflictError
+```
+
+## Error Handling
+
+### Custom Exceptions
+
+Use domain-specific exceptions:
+
+```python app/exceptions.py
+class ValidationError(AppException):
+    """Exception for input validation errors."""
+    def __init__(self, message: str = "Invalid input data"):
+        super().__init__(message, status_code=400)
+
+class NotFoundError(AppException):
+    """Exception for resources not found."""
+    def __init__(self, message: str = "Resource not found"):
+        super().__init__(message, status_code=404)
+
+class ConflictError(AppException):
+    """Exception for data conflicts (e.g., duplicates)."""
+    def __init__(self, message: str = "Resource conflict"):
+        super().__init__(message, status_code=409)
+```
+
+### HTTP Status Codes
+
+| Code | Usage                                      |
+|------|--------------------------------------------||
+| 200  | OK - Successful operation                  |
+| 201  | Created - Resource created                 |
+| 204  | No Content - Successful deletion           |
+| 400  | Bad Request - Validation error             |
+| 404  | Not Found - Resource not found             |
+| 409  | Conflict - Duplicate resource              |
+| 500  | Internal Server Error - Server error       |
+
+## Code Review Checklist
+
+<Accordion title="Pre-Commit Checklist">
+  - [ ] Code follows PEP 8 (formatted with Black)
+  - [ ] All functions have docstrings
+  - [ ] Type hints are used
+  - [ ] Names are descriptive and follow conventions
+  - [ ] Exceptions are handled correctly
+  - [ ] Forms use `FlaskForm` with validators
+  - [ ] Templates include `form.hidden_tag()` for CSRF
+  - [ ] Templates display form errors
+  - [ ] PRG pattern applied after POST
+  - [ ] No unnecessary commented code
+  - [ ] Imports are ordered correctly
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Templates Guide" icon="file-code" href="/development/templates">
+    Learn Jinja2 template patterns
+  </Card>
+  <Card title="Forms Guide" icon="input-text" href="/development/forms">
+    Create and validate forms
+  </Card>
+  <Card title="Project Structure" icon="folder-tree" href="/development/project-structure">
+    Understand the architecture
+  </Card>
+  <Card title="Environment Variables" icon="key" href="/development/environment-variables">
+    Configure your environment
+  </Card>
+</CardGroup>

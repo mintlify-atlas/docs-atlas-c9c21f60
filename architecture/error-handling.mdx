@@ -1,0 +1,573 @@
+---
+title: Error Handling System
+description: Exception hierarchy and error management in Muebles Roble
+---
+
+## Overview
+
+The Muebles Roble system implements a **centralized exception hierarchy** for consistent error handling across all modules. This approach provides clear error messages, proper HTTP status codes, and a unified error response format.
+
+## Exception Hierarchy
+
+```
+Exception (Python built-in)
+    └── AppException (Base)
+        ├── ValidationError (400)
+        ├── NotFoundError (404)
+        └── ConflictError (409)
+```
+
+<Note>
+All custom exceptions inherit from `AppException`, which provides common functionality for error handling.
+</Note>
+
+## Exception Classes
+
+### Base Exception: AppException
+
+The base exception class for all application errors.
+
+```python app/exceptions.py
+from typing import Optional
+
+class AppException(Exception):
+    """Excepción base de la aplicación."""
+    
+    def __init__(
+        self, 
+        message: str, 
+        status_code: int = 500, 
+        payload: Optional[dict] = None
+    ):
+        super().__init__(message)
+        self.message = message
+        self.status_code = status_code
+        self.payload = payload
+    
+    def to_dict(self) -> dict:
+        """Convierte la excepción a un diccionario para la respuesta JSON."""
+        response = {
+            'success': False,
+            'error': {
+                'message': self.message,
+                'code': self.status_code
+            }
+        }
+        if self.payload:
+            response['error']['details'] = self.payload
+        return response
+```
+
+**Attributes:**
+- `message` - Human-readable error description
+- `status_code` - HTTP status code (default: 500)
+- `payload` - Optional additional error details
+
+**Methods:**
+- `to_dict()` - Serializes exception to JSON-compatible dictionary
+
+### ValidationError (400 Bad Request)
+
+Raised when input data fails validation.
+
+```python app/exceptions.py
+class ValidationError(AppException):
+    """Excepción para errores de validación de datos de entrada."""
+    
+    def __init__(
+        self,
+        message: str = 'Datos de entrada inválidos',
+        payload: Optional[dict] = None,
+    ):
+        super().__init__(message, status_code=400, payload=payload)
+```
+
+**Usage:**
+```python
+# In service layer
+if not name or not name.strip():
+    raise ValidationError('El nombre del color es requerido')
+
+if len(name) > 50:
+    raise ValidationError('El nombre no puede exceder 50 caracteres')
+```
+
+### NotFoundError (404 Not Found)
+
+Raised when a requested resource doesn't exist.
+
+```python app/exceptions.py
+class NotFoundError(AppException):
+    """Excepción para recursos no encontrados."""
+    
+    def __init__(
+        self, 
+        message: str = 'Recurso no encontrado', 
+        payload: Optional[dict] = None
+    ):
+        super().__init__(message, status_code=404, payload=payload)
+```
+
+**Usage:**
+```python
+# In service layer
+color = Color.query.get(id_color)
+if not color:
+    raise NotFoundError(f'No se encontró un color con ID {id_color}')
+
+# With additional context
+raise NotFoundError(
+    'Color no encontrado',
+    payload={'id_color': id_color, 'searched_at': datetime.now()}
+)
+```
+
+### ConflictError (409 Conflict)
+
+Raised when a resource conflict occurs (e.g., duplicate entries).
+
+```python app/exceptions.py
+class ConflictError(AppException):
+    """Excepción para conflictos de datos (ej: duplicados)."""
+    
+    def __init__(
+        self,
+        message: str = 'Conflicto con el recurso existente',
+        payload: Optional[dict] = None,
+    ):
+        super().__init__(message, status_code=409, payload=payload)
+```
+
+**Usage:**
+```python
+# In service layer
+existing = Color.query.filter_by(name=name).first()
+if existing:
+    raise ConflictError(f"Ya existe un color con el nombre '{name}'")
+
+# Check uniqueness
+if db.session.query(Color.id_color).filter(
+    func.lower(Color.name) == name.lower(),
+    Color.id_color != id_color
+).first():
+    raise ConflictError('Ya existe otro color con ese nombre')
+```
+
+## Error Handlers
+
+### Global Error Handler Registration
+
+Error handlers are registered in the application factory:
+
+```python app/__init__.py
+from .exceptions import register_error_handlers
+
+def create_app():
+    app = Flask(__name__)
+    
+    # ... configuration ...
+    
+    # Register error handlers
+    register_error_handlers(app)
+    
+    return app
+```
+
+### Handler Implementation
+
+```python app/exceptions.py
+from flask import render_template
+
+def register_error_handlers(app):
+    """
+    Registra los manejadores de errores globales en la aplicación Flask.
+    
+    Args:
+        app: Instancia de la aplicación Flask
+    """
+    
+    @app.errorhandler(AppException)
+    def handle_app_exception(error):
+        """Manejador para excepciones personalizadas de la aplicación."""
+        app.logger.error(f'AppException: {error.message}')
+        return (
+            render_template(
+                'errors/error.html',
+                code=error.status_code,
+                message=error.message,
+            ),
+            error.status_code,
+        )
+    
+    @app.errorhandler(400)
+    def handle_bad_request(error):
+        """Manejador para errores 400 Bad Request."""
+        return (
+            render_template(
+                'errors/error.html',
+                code=400,
+                message='Solicitud incorrecta',
+            ),
+            400,
+        )
+    
+    @app.errorhandler(404)
+    def handle_not_found(error):
+        """Manejador para errores 404 Not Found."""
+        return (
+            render_template(
+                'errors/error.html',
+                code=404,
+                message='Página no encontrada',
+            ),
+            404,
+        )
+    
+    @app.errorhandler(405)
+    def handle_method_not_allowed(error):
+        """Manejador para errores 405 Method Not Allowed."""
+        return (
+            render_template(
+                'errors/error.html',
+                code=405,
+                message='Método no permitido',
+            ),
+            405,
+        )
+    
+    @app.errorhandler(500)
+    def handle_internal_error(error):
+        """Manejador para errores 500 Internal Server Error."""
+        app.logger.error(f'500 Error: {error}')
+        return (
+            render_template(
+                'errors/error.html',
+                code=500,
+                message='Error interno del servidor',
+            ),
+            500,
+        )
+```
+
+<Note>
+Error handlers render an `errors/error.html` template for user-friendly error pages.
+</Note>
+
+## Error Handling Flow
+
+### Complete Flow Example
+
+```python
+# 1. ROUTE LAYER - Catches exceptions
+@colors_bp.route('/create', methods=['GET', 'POST'])
+def create_color():
+    form = ColorForm()
+    
+    if form.validate_on_submit():
+        data = {'name': form.name.data}
+        try:
+            # Delegate to service
+            ColorService.create(data)
+            flash('Color creado exitosamente', 'success')
+            return redirect(url_for('colors.create_color'))
+        except ConflictError as e:
+            # Handle specific exception
+            flash(e.message, 'error')
+        except ValidationError as e:
+            # Handle validation errors
+            flash(e.message, 'error')
+    
+    return render_template('colors/create.html', form=form)
+
+# 2. SERVICE LAYER - Raises exceptions
+class ColorService:
+    @staticmethod
+    def create(data: dict) -> dict:
+        name = data.get('name')
+        
+        # Business validation
+        if not name or not name.strip():
+            raise ValidationError('El nombre del color es requerido')
+        
+        name = name.strip()
+        
+        # Check for duplicates
+        existing = Color.query.filter(
+            func.lower(Color.name) == name.lower()
+        ).first()
+        if existing:
+            raise ConflictError(
+                f"Ya existe un color con el nombre '{name}'"
+            )
+        
+        # Create and persist
+        color = Color(name=name)
+        db.session.add(color)
+        
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            raise ConflictError(
+                f"Ya existe un color con el nombre '{name}'"
+            )
+        
+        return color.to_dict()
+```
+
+### Flow Diagram
+
+```
+User Request
+     ↓
+[Route Layer]
+     │
+     ├── Validate Form (WTForms)
+     │
+     └── Call Service
+             ↓
+     [Service Layer]
+         │
+         ├── Business Validation → raise ValidationError
+         │
+         ├── Check Duplicates → raise ConflictError
+         │
+         ├── Check Existence → raise NotFoundError
+         │
+         └── Process
+                 ↓
+         [Model Layer]
+             │
+             └── Database
+                     ↓
+             Success or IntegrityError
+                     ↓
+         [Route Layer] - Catch Exception
+             │
+             ├── Show Flash Message
+             │
+             └── Render Template
+                     ↓
+         User Response
+```
+
+## Best Practices
+
+### When to Use Each Exception
+
+<AccordionGroup>
+  <Accordion title="ValidationError - Input Validation">
+    Use when user input is invalid:
+    
+    ```python
+    # Empty or missing required fields
+    if not name or not name.strip():
+        raise ValidationError('El nombre es requerido')
+    
+    # Length constraints
+    if len(name) > 50:
+        raise ValidationError('El nombre no puede exceder 50 caracteres')
+    
+    # Format validation
+    if not re.match(r'^#[0-9A-Fa-f]{6}$', hex_code):
+        raise ValidationError('Código hex inválido')
+    
+    # Range validation
+    if quantity < 0:
+        raise ValidationError('La cantidad no puede ser negativa')
+    ```
+  </Accordion>
+  
+  <Accordion title="NotFoundError - Missing Resources">
+    Use when a resource doesn't exist:
+    
+    ```python
+    # Entity not found by ID
+    color = Color.query.get(id_color)
+    if not color:
+        raise NotFoundError(f'No se encontró color con ID {id_color}')
+    
+    # Entity not found by criteria
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        raise NotFoundError('Usuario no encontrado')
+    ```
+  </Accordion>
+  
+  <Accordion title="ConflictError - Resource Conflicts">
+    Use when a conflict occurs:
+    
+    ```python
+    # Duplicate entry
+    existing = Color.query.filter_by(name=name).first()
+    if existing:
+        raise ConflictError('Ya existe un color con ese nombre')
+    
+    # State conflict
+    if order.status == 'shipped':
+        raise ConflictError('No se puede modificar un pedido enviado')
+    
+    # Concurrent modification
+    if entity.version != expected_version:
+        raise ConflictError('El recurso fue modificado por otro usuario')
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Error Messages
+
+<Tabs>
+  <Tab title="Be Specific">
+    ```python
+    # Good - Specific and actionable
+    raise ValidationError('El nombre del color es requerido')
+    raise NotFoundError(f'No se encontró color con ID {id_color}')
+    
+    # Bad - Generic and unhelpful
+    raise ValidationError('Error de validación')
+    raise NotFoundError('No encontrado')
+    ```
+  </Tab>
+  
+  <Tab title="User-Friendly">
+    ```python
+    # Good - Clear for end users
+    raise ConflictError(
+        f"Ya existe un color con el nombre '{name}'. "
+        "Por favor, elige un nombre diferente."
+    )
+    
+    # Bad - Technical jargon
+    raise ConflictError(
+        f"UNIQUE constraint failed on colors.name for value '{name}'"
+    )
+    ```
+  </Tab>
+  
+  <Tab title="Include Context">
+    ```python
+    # Good - Provides context
+    raise ValidationError(
+        'El nombre debe tener entre 1 y 50 caracteres',
+        payload={'current_length': len(name), 'max_length': 50}
+    )
+    
+    # Acceptable - Simple message
+    raise ValidationError('El nombre debe tener entre 1 y 50 caracteres')
+    ```
+  </Tab>
+</Tabs>
+
+### Catching Exceptions
+
+<CodeGroup>
+```python Catch Specific Exceptions
+# Good - Catch specific exceptions
+try:
+    ColorService.create(data)
+    flash('Color creado exitosamente', 'success')
+except ConflictError as e:
+    flash(e.message, 'error')
+except ValidationError as e:
+    flash(e.message, 'error')
+```
+
+```python Catch Multiple Exceptions
+# Good - Multiple exceptions with same handling
+try:
+    ColorService.update(id_color, data)
+    flash('Color actualizado exitosamente', 'success')
+except (ConflictError, ValidationError) as e:
+    flash(e.message, 'error')
+except NotFoundError as e:
+    flash(e.message, 'error')
+    return redirect(url_for('colors.list_colors'))
+```
+
+```python Avoid Broad Catches
+# Bad - Too broad
+try:
+    ColorService.create(data)
+except Exception as e:
+    flash('Error desconocido', 'error')
+
+# Good - Let unhandled exceptions bubble up
+try:
+    ColorService.create(data)
+except (ConflictError, ValidationError) as e:
+    flash(e.message, 'error')
+# Let other exceptions be handled by global handlers
+```
+</CodeGroup>
+
+## Testing Error Handling
+
+### Unit Tests
+
+```python tests/test_color_service.py
+import pytest
+from app.exceptions import ValidationError, ConflictError, NotFoundError
+from app.catalogs.colors.services import ColorService
+
+def test_create_color_validation_error():
+    """Test that empty name raises ValidationError."""
+    with pytest.raises(ValidationError) as exc_info:
+        ColorService.create({'name': ''})
+    
+    assert 'nombre del color es requerido' in str(exc_info.value)
+
+def test_create_color_conflict_error(db_session):
+    """Test that duplicate name raises ConflictError."""
+    # Create first color
+    ColorService.create({'name': 'Red'})
+    
+    # Try to create duplicate
+    with pytest.raises(ConflictError) as exc_info:
+        ColorService.create({'name': 'Red'})
+    
+    assert 'Ya existe' in str(exc_info.value)
+
+def test_get_color_not_found_error():
+    """Test that non-existent ID raises NotFoundError."""
+    with pytest.raises(NotFoundError) as exc_info:
+        ColorService.get_by_id(99999)
+    
+    assert '99999' in str(exc_info.value)
+```
+
+## Future Extensions
+
+The exception hierarchy can be extended as needed:
+
+```python app/exceptions.py
+class UnauthorizedError(AppException):
+    """Excepción para acceso no autorizado (401)."""
+    def __init__(self, message='No autorizado', payload=None):
+        super().__init__(message, status_code=401, payload=payload)
+
+class ForbiddenError(AppException):
+    """Excepción para permisos insuficientes (403)."""
+    def __init__(self, message='Acceso prohibido', payload=None):
+        super().__init__(message, status_code=403, payload=payload)
+
+class BusinessLogicError(AppException):
+    """Excepción para errores de lógica de negocio (422)."""
+    def __init__(self, message='Error de lógica de negocio', payload=None):
+        super().__init__(message, status_code=422, payload=payload)
+
+class DatabaseError(AppException):
+    """Excepción para errores de base de datos (500)."""
+    def __init__(self, message='Error de base de datos', payload=None):
+        super().__init__(message, status_code=500, payload=payload)
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="MVC Layers" icon="layer-group" href="/architecture/mvc-layers">
+    Learn how exceptions flow through the layers
+  </Card>
+  <Card title="Module Organization" icon="folder-tree" href="/architecture/modules">
+    Understand module structure and error handling
+  </Card>
+</CardGroup>

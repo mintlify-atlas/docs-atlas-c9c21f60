@@ -1,0 +1,627 @@
+---
+title: "WTForms Guide"
+description: "Creating and validating forms with WTForms in the Muebles Roble application"
+---
+
+## Overview
+
+The application uses **Flask-WTF** and **WTForms** for form handling and validation, providing:
+
+<CardGroup cols={3}>
+  <Card title="CSRF Protection" icon="shield">
+    Automatic protection against cross-site request forgery
+  </Card>
+  <Card title="Validation" icon="check-circle">
+    Server-side validation with built-in validators
+  </Card>
+  <Card title="Error Handling" icon="exclamation-triangle">
+    Automatic error messages and field-level errors
+  </Card>
+</CardGroup>
+
+## Basic Form Structure
+
+### Creating a Form Class
+
+Forms are defined in `forms.py` within each module:
+
+```python app/catalogs/colors/forms.py
+"""
+Forms for the colors module.
+"""
+
+from flask_wtf import FlaskForm
+from wtforms import StringField
+from wtforms.validators import DataRequired, Length
+
+
+class ColorForm(FlaskForm):
+    """Form for creating a color."""
+
+    name = StringField(
+        'Name',
+        validators=[
+            DataRequired(message='Color name is required'),
+            Length(max=50, message='Name cannot exceed 50 characters'),
+        ],
+    )
+```
+
+### Form with Multiple Fields
+
+```python app/catalogs/wood_types/forms.py
+from flask_wtf import FlaskForm
+from wtforms import StringField
+from wtforms.validators import DataRequired, Length
+
+
+class WoodTypeForm(FlaskForm):
+    """Form for creating a wood type."""
+
+    name = StringField(
+        'Name',
+        validators=[
+            DataRequired(message='Wood type name is required'),
+            Length(min=3, max=50, message='Name must be between 3 and 50 characters'),
+        ],
+    )
+    
+    description = StringField(
+        'Description',
+        validators=[
+            Length(max=200, message='Description cannot exceed 200 characters'),
+        ],
+    )
+```
+
+## Common Field Types
+
+### Available Fields
+
+```python
+from wtforms import (
+    StringField,      # Text input
+    TextAreaField,    # Multi-line text
+    IntegerField,     # Integer numbers
+    FloatField,       # Decimal numbers
+    BooleanField,     # Checkboxes
+    DateField,        # Date picker
+    DateTimeField,    # Date and time
+    SelectField,      # Dropdown select
+    RadioField,       # Radio buttons
+    SubmitField,      # Submit button
+)
+```
+
+### Field Examples
+
+```python
+class ProductForm(FlaskForm):
+    # Text input
+    name = StringField('Product Name', validators=[DataRequired()])
+    
+    # Multi-line text
+    description = TextAreaField('Description', validators=[Length(max=500)])
+    
+    # Number input
+    quantity = IntegerField('Quantity', validators=[DataRequired()])
+    price = FloatField('Price', validators=[DataRequired()])
+    
+    # Checkbox
+    is_active = BooleanField('Active')
+    
+    # Dropdown
+    category = SelectField(
+        'Category',
+        choices=[('furniture', 'Furniture'), ('material', 'Material')],
+        validators=[DataRequired()]
+    )
+```
+
+## Validators
+
+### Built-in Validators
+
+```python
+from wtforms.validators import (
+    DataRequired,     # Field must not be empty
+    Length,           # String length constraints
+    Email,            # Valid email format
+    EqualTo,          # Must equal another field
+    NumberRange,      # Number within range
+    Regexp,           # Match regex pattern
+    URL,              # Valid URL format
+    Optional,         # Field is optional
+)
+```
+
+### Validator Examples
+
+```python
+class UserForm(FlaskForm):
+    # Required field
+    username = StringField(
+        'Username',
+        validators=[DataRequired(message='Username is required')]
+    )
+    
+    # Length constraints
+    name = StringField(
+        'Name',
+        validators=[
+            DataRequired(),
+            Length(min=3, max=50, message='Name must be 3-50 characters')
+        ]
+    )
+    
+    # Email validation
+    email = StringField(
+        'Email',
+        validators=[DataRequired(), Email(message='Invalid email address')]
+    )
+    
+    # Number range
+    age = IntegerField(
+        'Age',
+        validators=[NumberRange(min=18, max=100, message='Age must be 18-100')]
+    )
+    
+    # Password confirmation
+    password = PasswordField('Password', validators=[DataRequired()])
+    confirm_password = PasswordField(
+        'Confirm Password',
+        validators=[DataRequired(), EqualTo('password', message='Passwords must match')]
+    )
+    
+    # Optional field
+    phone = StringField(
+        'Phone',
+        validators=[Optional(), Length(max=15)]
+    )
+```
+
+## Using Forms in Routes
+
+### Create Form (GET/POST)
+
+```python app/catalogs/colors/routes.py
+from flask import flash, redirect, render_template, url_for
+
+from . import colors_bp
+from .forms import ColorForm
+from .services import ColorService
+from app.exceptions import ConflictError
+
+
+@colors_bp.route('/create', methods=['GET', 'POST'])
+def create_color():
+    """
+    Display form and create a new color.
+    
+    GET: Render the creation form.
+    POST: Validate form, create color, and redirect.
+    """
+    form = ColorForm()
+
+    if form.validate_on_submit():
+        data = {'name': form.name.data}
+        try:
+            ColorService.create(data)
+            flash('Color created successfully', 'success')
+            return redirect(url_for('colors.create_color'))
+        except ConflictError as e:
+            flash(e.message, 'error')
+
+    return render_template('colors/create.html', form=form)
+```
+
+### Edit Form with Pre-population
+
+```python app/catalogs/colors/routes.py
+from flask import flash, redirect, render_template, request, url_for
+
+@colors_bp.route('/<int:id_color>/edit', methods=['GET', 'POST'])
+def edit_color(id_color: int):
+    """
+    Display pre-populated form and update a color.
+    
+    GET: Render form with current data.
+    POST: Validate form, update color, and redirect.
+    """
+    try:
+        color = ColorService.get_by_id(id_color)
+    except NotFoundError as e:
+        flash(e.message, 'error')
+        return redirect(url_for('colors.list_colors'))
+
+    form = ColorForm()
+
+    if form.validate_on_submit():
+        data = {'name': form.name.data}
+        try:
+            ColorService.update(id_color, data)
+            flash('Color updated successfully', 'success')
+            return redirect(url_for('colors.list_colors'))
+        except (ConflictError, ValidationError) as e:
+            flash(e.message, 'error')
+    elif request.method == 'GET':
+        # Pre-populate form on GET request
+        form.name.data = color.name
+
+    return render_template('colors/edit.html', form=form, color=color)
+```
+
+### Form Validation Flow
+
+<Steps>
+  <Step title="Instantiate Form">
+    Create form instance from request data:
+    ```python
+    form = ColorForm()
+    ```
+  </Step>
+  
+  <Step title="Validate on Submit">
+    Check if form was submitted and is valid:
+    ```python
+    if form.validate_on_submit():
+        # Form is valid, process data
+    ```
+  </Step>
+  
+  <Step title="Access Field Data">
+    Retrieve validated data from form fields:
+    ```python
+    data = {'name': form.name.data}
+    ```
+  </Step>
+  
+  <Step title="Handle Errors">
+    Catch service exceptions and flash messages:
+    ```python
+    except ConflictError as e:
+        flash(e.message, 'error')
+    ```
+  </Step>
+  
+  <Step title="Redirect on Success">
+    Use PRG pattern after successful submission:
+    ```python
+    return redirect(url_for('colors.list_colors'))
+    ```
+  </Step>
+</Steps>
+
+## Rendering Forms in Templates
+
+### Basic Form Rendering
+
+```html app/templates/colors/create.html
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Add New Color</h1>
+
+<form method="POST" action="{{ url_for('colors.create_color') }}">
+  {# CSRF protection - REQUIRED #}
+  {{ form.hidden_tag() }}
+  
+  {# Field label #}
+  {{ form.name.label }}
+  
+  {# Field input #}
+  {{ form.name(size=30) }}
+  
+  {# Display validation errors #}
+  {% for error in form.name.errors %}
+    <p style="color: red;">{{ error }}</p>
+  {% endfor %}
+  
+  <button type="submit">Create</button>
+</form>
+{% endblock %}
+```
+
+### Field with Attributes
+
+```html
+{# Add HTML attributes to fields #}
+{{ form.name(size=30, class="form-control", placeholder="Enter color name") }}
+
+{# Checkbox #}
+{{ form.is_active(checked=true) }}
+
+{# TextArea #}
+{{ form.description(rows=5, cols=40) }}
+```
+
+### Complete Form Example
+
+```html
+<form method="POST" action="{{ url_for('colors.create_color') }}">
+  {{ form.hidden_tag() }}
+  
+  <div class="form-group">
+    {{ form.name.label }}
+    {{ form.name(class="form-control") }}
+    {% if form.name.errors %}
+      {% for error in form.name.errors %}
+        <p class="error">{{ error }}</p>
+      {% endfor %}
+    {% endif %}
+  </div>
+  
+  <div class="form-group">
+    {{ form.description.label }}
+    {{ form.description(class="form-control", rows=4) }}
+    {% if form.description.errors %}
+      {% for error in form.description.errors %}
+        <p class="error">{{ error }}</p>
+      {% endfor %}
+    {% endif %}
+  </div>
+  
+  <button type="submit" class="btn btn-primary">Submit</button>
+</form>
+```
+
+## CSRF Protection
+
+### Why CSRF Protection?
+
+<Info>
+  CSRF (Cross-Site Request Forgery) protection prevents malicious sites from submitting forms on behalf of your users.
+</Info>
+
+### Including CSRF Token
+
+<Warning>
+  **Always** include `{{ form.hidden_tag() }}` in every form. Forms will fail validation without it.
+</Warning>
+
+```html
+<form method="POST">
+  {# This includes the CSRF token #}
+  {{ form.hidden_tag() }}
+  
+  <!-- Rest of form -->
+</form>
+```
+
+### CSRF for Inline Forms
+
+For simple delete/action forms without WTForms:
+
+```html
+<form method="POST" action="{{ url_for('colors.delete_color', id_color=color.id_color) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+  <button type="submit">Delete</button>
+</form>
+```
+
+## Custom Validators
+
+### Creating Custom Validators
+
+```python
+from wtforms.validators import ValidationError
+
+def validate_hex_color(form, field):
+    """
+    Custom validator for hex color codes.
+    """
+    value = field.data
+    if value and not value.startswith('#'):
+        raise ValidationError('Hex code must start with #')
+    if value and len(value) != 7:
+        raise ValidationError('Hex code must be 7 characters')
+
+
+class ColorForm(FlaskForm):
+    name = StringField('Name', validators=[DataRequired()])
+    hex_code = StringField(
+        'Hex Code',
+        validators=[Optional(), validate_hex_color]
+    )
+```
+
+### Inline Field Validation
+
+```python
+class ColorForm(FlaskForm):
+    name = StringField('Name', validators=[DataRequired()])
+    
+    def validate_name(self, field):
+        """
+        Custom validation method for name field.
+        Method name must be validate_<field_name>.
+        """
+        if field.data and field.data.lower() in ['none', 'null']:
+            raise ValidationError('Invalid color name')
+```
+
+## Form Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always use FlaskForm base class">
+    Inherit from `FlaskForm` for automatic CSRF protection:
+    
+    ```python
+    from flask_wtf import FlaskForm
+    
+    class MyForm(FlaskForm):
+        pass
+    ```
+  </Accordion>
+  
+  <Accordion title="Provide custom error messages">
+    Always provide user-friendly error messages:
+    
+    ```python
+    name = StringField(
+        'Name',
+        validators=[
+            DataRequired(message='Name is required'),
+            Length(max=50, message='Name cannot exceed 50 characters')
+        ]
+    )
+    ```
+  </Accordion>
+  
+  <Accordion title="Use validate_on_submit()">
+    Check both POST method and validation:
+    
+    ```python
+    if form.validate_on_submit():
+        # Form was submitted via POST and is valid
+    ```
+  </Accordion>
+  
+  <Accordion title="Access data via .data attribute">
+    Retrieve validated field values:
+    
+    ```python
+    name = form.name.data
+    ```
+  </Accordion>
+  
+  <Accordion title="Follow PRG pattern">
+    Always redirect after successful POST:
+    
+    ```python
+    if form.validate_on_submit():
+        # Process form
+        flash('Success!', 'success')
+        return redirect(url_for('view_name'))
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Error Handling
+
+### Field-Level Errors
+
+Display errors for specific fields:
+
+```html
+{% for error in form.name.errors %}
+  <p style="color: red;">{{ error }}</p>
+{% endfor %}
+```
+
+### Form-Level Errors
+
+Display all form errors:
+
+```html
+{% if form.errors %}
+  <div class="alert alert-danger">
+    <ul>
+      {% for field, errors in form.errors.items() %}
+        {% for error in errors %}
+          <li>{{ field }}: {{ error }}</li>
+        {% endfor %}
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+```
+
+### Service Layer Errors
+
+Handle business logic errors with flash messages:
+
+```python
+try:
+    ColorService.create(data)
+    flash('Color created successfully', 'success')
+    return redirect(url_for('colors.list_colors'))
+except ConflictError as e:
+    flash(e.message, 'error')
+except ValidationError as e:
+    flash(e.message, 'error')
+```
+
+## Real-World Example: ColorForm
+
+Complete example from the application:
+
+```python app/catalogs/colors/forms.py
+"""
+Forms for the colors module.
+"""
+
+from flask_wtf import FlaskForm
+from wtforms import StringField
+from wtforms.validators import DataRequired, Length
+
+
+class ColorForm(FlaskForm):
+    """Form for creating/editing a color."""
+
+    name = StringField(
+        "Name",
+        validators=[
+            DataRequired(message="Color name is required"),
+            Length(max=50, message="Name cannot exceed 50 characters"),
+        ],
+    )
+```
+
+Usage in route:
+
+```python app/catalogs/colors/routes.py
+@colors_bp.route("/create", methods=["GET", "POST"])
+def create_color():
+    form = ColorForm()
+
+    if form.validate_on_submit():
+        data = {"name": form.name.data}
+        try:
+            ColorService.create(data)
+            flash("Color created successfully", "success")
+            return redirect(url_for("colors.create_color"))
+        except ConflictError as e:
+            flash(e.message, "error")
+
+    return render_template("colors/create.html", form=form)
+```
+
+Template rendering:
+
+```html app/templates/colors/create.html
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Add New Color</h1>
+
+<form method="POST" action="{{ url_for('colors.create_color') }}">
+    {{ form.hidden_tag() }}
+
+    {{ form.name.label }}
+    {{ form.name(size=30) }}
+    {% for error in form.name.errors %}
+        <p style="color: red;">{{ error }}</p>
+    {% endfor %}
+
+    <button type="submit">Create</button>
+</form>
+{% endblock %}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Templates Guide" icon="file-code" href="/development/templates">
+    Learn Jinja2 template patterns
+  </Card>
+  <Card title="Coding Conventions" icon="code" href="/development/coding-conventions">
+    Follow coding standards
+  </Card>
+  <Card title="Project Structure" icon="folder-tree" href="/development/project-structure">
+    Understand the architecture
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/development/deployment">
+    Deploy to production
+  </Card>
+</CardGroup>

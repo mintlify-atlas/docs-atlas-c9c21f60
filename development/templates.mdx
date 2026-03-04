@@ -1,0 +1,465 @@
+---
+title: "Jinja2 Templates Guide"
+description: "Working with Jinja2 templates in the Muebles Roble application"
+---
+
+## Template Structure
+
+The application uses **Jinja2** as the templating engine, organized by module with a shared base template.
+
+```
+templates/
+├── base.html              # Base layout (navigation, flash messages)
+├── colors/                # Color module templates
+│   ├── list.html
+│   ├── create.html
+│   └── edit.html
+├── wood_types/            # Wood types templates
+├── furniture_types/       # Furniture types templates
+├── roles/                 # Roles templates
+├── unit_of_measures/      # Unit of measures templates
+└── errors/                # Error pages
+    └── error.html
+```
+
+## Base Template
+
+All templates extend from `base.html`, which provides the common layout:
+
+```html app/templates/base.html
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}Furniture Store{% endblock %}</title>
+  </head>
+  <body>
+    <nav>
+      <a href="{{ url_for('colors.list_colors') }}">Colores</a> |
+      <a href="{{ url_for('colors.create_color') }}">Crear Color</a> |
+      <a href="{{ url_for('roles.list_roles') }}">Roles</a> |
+      <!-- More navigation links -->
+    </nav>
+    <hr />
+    <main>
+      {# Flash messages #}
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <p role="alert" 
+               style="color: {{ 'green' if category == 'success' else 'red' }};">
+              <strong>{{ 'Success:' if category == 'success' else 'Error:' }}</strong>
+              {{ message }}
+            </p>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+      
+      {# Page content #}
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>
+```
+
+### Base Template Features
+
+<CardGroup cols={3}>
+  <Card title="Navigation" icon="bars">
+    Consistent navigation across all pages
+  </Card>
+  <Card title="Flash Messages" icon="message">
+    Display success/error notifications
+  </Card>
+  <Card title="Content Block" icon="file">
+    Placeholder for page-specific content
+  </Card>
+</CardGroup>
+
+## Extending the Base Template
+
+All page templates extend `base.html` using template inheritance:
+
+```html app/templates/colors/create.html
+{% extends "base.html" %}
+
+{% block title %}Create Color - Furniture Store{% endblock %}
+
+{% block content %}
+  <h1>Add New Color</h1>
+  
+  <form method="POST" action="{{ url_for('colors.create_color') }}">
+    {{ form.hidden_tag() }}
+    
+    {{ form.name.label }}
+    {{ form.name(size=30) }}
+    {% for error in form.name.errors %}
+      <p style="color: red;">{{ error }}</p>
+    {% endfor %}
+    
+    <button type="submit">Create</button>
+  </form>
+{% endblock %}
+```
+
+## Template Blocks
+
+### Title Block
+
+Customize the page title:
+
+```html
+{% block title %}Your Page Title - Furniture Store{% endblock %}
+```
+
+### Content Block
+
+Main page content:
+
+```html
+{% block content %}
+  <!-- Your page content here -->
+{% endblock %}
+```
+
+## Working with Forms
+
+### Form Rendering
+
+Render WTForms in templates:
+
+```html
+<form method="POST" action="{{ url_for('colors.create_color') }}">
+  {# CSRF token - REQUIRED #}
+  {{ form.hidden_tag() }}
+  
+  {# Field label #}
+  {{ form.name.label }}
+  
+  {# Field input #}
+  {{ form.name(size=30) }}
+  
+  {# Display validation errors #}
+  {% for error in form.name.errors %}
+    <p style="color: red;">{{ error }}</p>
+  {% endfor %}
+  
+  <button type="submit">Submit</button>
+</form>
+```
+
+<Warning>
+  Always include `{{ form.hidden_tag() }}` for CSRF protection. Forms will fail without it.
+</Warning>
+
+### Form Field Errors
+
+Display field-specific validation errors:
+
+```html
+{% for error in form.name.errors %}
+  <p style="color: red;">{{ error }}</p>
+{% endfor %}
+```
+
+### Pre-populating Forms (Edit)
+
+For edit forms, populate fields on GET requests:
+
+```python app/catalogs/colors/routes.py
+@colors_bp.route('/<int:id_color>/edit', methods=['GET', 'POST'])
+def edit_color(id_color: int):
+    color = ColorService.get_by_id(id_color)
+    form = ColorForm()
+    
+    if form.validate_on_submit():
+        # Handle POST
+        pass
+    elif request.method == 'GET':
+        # Pre-populate form on GET
+        form.name.data = color.name
+    
+    return render_template('colors/edit.html', form=form, color=color)
+```
+
+## Flash Messages
+
+### Setting Flash Messages
+
+In routes, use `flash()` to send messages to the user:
+
+```python
+from flask import flash
+
+# Success message
+flash('Color created successfully', 'success')
+
+# Error message
+flash('Color name already exists', 'error')
+```
+
+### Displaying Flash Messages
+
+Flash messages are displayed in `base.html`:
+
+```html
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <p role="alert" 
+         style="color: {{ 'green' if category == 'success' else 'red' }};">
+        <strong>{{ 'Success:' if category == 'success' else 'Error:' }}</strong>
+        {{ message }}
+      </p>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+```
+
+### Flash Message Categories
+
+| Category  | Color | Usage                     |
+|-----------|-------|---------------------------|
+| `success` | Green | Successful operations     |
+| `error`   | Red   | Errors and failures       |
+
+## URL Generation
+
+### Using `url_for()`
+
+<Info>
+  Always use `url_for()` to generate URLs. Never hardcode paths.
+</Info>
+
+```html
+{# Basic route #}
+<a href="{{ url_for('colors.list_colors') }}">View Colors</a>
+
+{# Route with parameter #}
+<a href="{{ url_for('colors.edit_color', id_color=color.id_color) }}">Edit</a>
+
+{# Form action #}
+<form method="POST" action="{{ url_for('colors.create_color') }}">
+  ...
+</form>
+```
+
+## List Templates
+
+### Displaying Data Tables
+
+Example from `colors/list.html`:
+
+```html app/templates/colors/list.html
+{% extends "base.html" %}
+
+{% block title %}Colors - Furniture Store{% endblock %}
+
+{% block content %}
+  <h1>Color Catalog</h1>
+  
+  <a href="{{ url_for('colors.create_color') }}">Add New Color</a>
+  
+  <h2>Color List</h2>
+  {% if colors %}
+    <table class="colors-table">
+      <thead>
+        <tr>
+          <th scope="col">ID</th>
+          <th scope="col">Name</th>
+          <th scope="col">Active</th>
+          <th scope="col">Created</th>
+          <th scope="col">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for color in colors %}
+          <tr>
+            <td>{{ color.id_color }}</td>
+            <td>{{ color.name }}</td>
+            <td>{{ "Yes" if color.active else "No" }}</td>
+            <td>{{ color.created_at.strftime('%Y-%m-%d %H:%M') if color.created_at else 'N/A' }}</td>
+            <td>
+              <a href="{{ url_for('colors.edit_color', id_color=color.id_color) }}">Edit</a>
+              
+              {# Delete form #}
+              <form method="POST" 
+                    action="{{ url_for('colors.delete_color', id_color=color.id_color) }}"
+                    style="display:inline;"
+                    onsubmit="return confirm('Are you sure you want to delete this color?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button type="submit" style="color: red;">Delete</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No colors registered.</p>
+  {% endif %}
+{% endblock %}
+```
+
+## Delete Forms with CSRF
+
+For delete actions, use inline forms with CSRF protection:
+
+```html
+<form method="POST" 
+      action="{{ url_for('colors.delete_color', id_color=color.id_color) }}"
+      style="display:inline;"
+      onsubmit="return confirm('Are you sure?');">
+  {# CSRF token for inline forms #}
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+  <button type="submit" style="color: red;">Delete</button>
+</form>
+```
+
+<Warning>
+  For inline delete forms, use `{{ csrf_token() }}` instead of `{{ form.hidden_tag() }}`.
+</Warning>
+
+## Conditional Rendering
+
+### If/Else Statements
+
+```html
+{% if colors %}
+  <table>...</table>
+{% else %}
+  <p>No colors available.</p>
+{% endif %}
+```
+
+### Ternary Expressions
+
+```html
+<td>{{ "Yes" if color.active else "No" }}</td>
+```
+
+## Loops
+
+### For Loops
+
+```html
+{% for color in colors %}
+  <tr>
+    <td>{{ color.name }}</td>
+  </tr>
+{% endfor %}
+```
+
+### Loop Variables
+
+```html
+{% for color in colors %}
+  <tr class="{{ 'odd' if loop.index % 2 else 'even' }}">
+    <td>{{ loop.index }}. {{ color.name }}</td>
+  </tr>
+{% endfor %}
+```
+
+Available loop variables:
+- `loop.index` - Current iteration (1-indexed)
+- `loop.index0` - Current iteration (0-indexed)
+- `loop.first` - True if first iteration
+- `loop.last` - True if last iteration
+
+## Comments
+
+```html
+{# This is a Jinja2 comment - not rendered in HTML #}
+
+<!-- This is an HTML comment - visible in page source -->
+```
+
+## Filters
+
+### Common Filters
+
+```html
+{# String formatting #}
+{{ color.name|upper }}
+{{ color.name|lower }}
+{{ color.name|title }}
+
+{# Date formatting #}
+{{ color.created_at.strftime('%Y-%m-%d %H:%M') }}
+
+{# Default value #}
+{{ color.description|default('No description') }}
+
+{# Safe HTML rendering #}
+{{ html_content|safe }}
+```
+
+## Template Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always extend base.html">
+    Ensures consistent layout and navigation across all pages.
+    
+    ```html
+    {% extends "base.html" %}
+    ```
+  </Accordion>
+  
+  <Accordion title="Include CSRF protection">
+    Always include `{{ form.hidden_tag() }}` in forms.
+    
+    ```html
+    <form method="POST">
+      {{ form.hidden_tag() }}
+    </form>
+    ```
+  </Accordion>
+  
+  <Accordion title="Use url_for() for URLs">
+    Never hardcode URLs. Use `url_for()` for all links and form actions.
+    
+    ```html
+    <a href="{{ url_for('colors.list_colors') }}">Colors</a>
+    ```
+  </Accordion>
+  
+  <Accordion title="Display form errors">
+    Show validation errors to help users correct input.
+    
+    ```html
+    {% for error in form.name.errors %}
+      <p style="color: red;">{{ error }}</p>
+    {% endfor %}
+    ```
+  </Accordion>
+  
+  <Accordion title="Handle empty data">
+    Check if data exists before rendering tables.
+    
+    ```html
+    {% if colors %}
+      <table>...</table>
+    {% else %}
+      <p>No colors available.</p>
+    {% endif %}
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Forms Guide" icon="input-text" href="/development/forms">
+    Learn WTForms validation patterns
+  </Card>
+  <Card title="Coding Conventions" icon="code" href="/development/coding-conventions">
+    Follow coding standards
+  </Card>
+  <Card title="Project Structure" icon="folder-tree" href="/development/project-structure">
+    Understand the architecture
+  </Card>
+  <Card title="Environment Variables" icon="key" href="/development/environment-variables">
+    Configure your environment
+  </Card>
+</CardGroup>

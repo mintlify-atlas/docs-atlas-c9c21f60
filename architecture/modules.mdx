@@ -1,0 +1,453 @@
+---
+title: Module Organization
+description: Learn how the system is organized into modular blueprints
+---
+
+## Module Structure
+
+The Muebles Roble system is organized into **self-contained modules** using Flask Blueprints. Each module represents a specific domain or feature area.
+
+## Current Modules
+
+<CardGroup cols={2}>
+  <Card title="Colors" icon="palette">
+    Manages the color catalog for furniture references
+  </Card>
+  <Card title="Roles" icon="user-shield">
+    Handles user roles and permissions
+  </Card>
+  <Card title="Wood Types" icon="tree">
+    Catalogs different types of wood materials
+  </Card>
+  <Card title="Unit of Measures" icon="ruler">
+    Manages measurement units (cm, m, kg, etc.)
+  </Card>
+</CardGroup>
+
+## Standard Module Structure
+
+Each module follows a consistent directory structure:
+
+```
+app/
+├── catalogs/
+│   └── colors/
+│       ├── __init__.py      # Blueprint definition
+│       ├── routes.py        # Routes and controllers
+│       ├── services.py      # Business logic
+│       └── forms.py         # WTForms validation
+│
+├── models/
+│   └── color.py            # Data model
+│
+└── templates/
+    └── colors/
+        ├── list.html       # List view
+        ├── create.html     # Create form
+        └── edit.html       # Edit form
+```
+
+### File Breakdown
+
+<AccordionGroup>
+  <Accordion title="__init__.py - Blueprint Definition">
+    Defines the Flask Blueprint for the module:
+    
+    ```python app/catalogs/colors/__init__.py
+    from flask import Blueprint
+    
+    colors_bp = Blueprint('colors', __name__)
+    
+    from . import routes
+    ```
+    
+    The blueprint is imported and registered in the application factory.
+  </Accordion>
+  
+  <Accordion title="routes.py - HTTP Handlers">
+    Contains route definitions and request handling:
+    
+    ```python app/catalogs/colors/routes.py
+    from . import colors_bp
+    from .services import ColorService
+    from .forms import ColorForm
+    
+    @colors_bp.route('/', methods=['GET'])
+    def list_colors():
+        """Display list of colors."""
+        colors = ColorService.get_all()
+        return render_template('colors/list.html', colors=colors)
+    
+    @colors_bp.route('/create', methods=['GET', 'POST'])
+    def create_color():
+        """Show form and create new color."""
+        form = ColorForm()
+        if form.validate_on_submit():
+            ColorService.create({'name': form.name.data})
+            flash('Color creado exitosamente', 'success')
+            return redirect(url_for('colors.list_colors'))
+        return render_template('colors/create.html', form=form)
+    ```
+  </Accordion>
+  
+  <Accordion title="services.py - Business Logic">
+    Contains domain logic and orchestrates operations:
+    
+    ```python app/catalogs/colors/services.py
+    from app.models.color import Color
+    from app.exceptions import ValidationError, ConflictError
+    
+    class ColorService:
+        @staticmethod
+        def get_all():
+            return Color.query.filter_by(active=True).all()
+        
+        @staticmethod
+        def create(data: dict):
+            # Business validation
+            name = data.get('name')
+            if not name:
+                raise ValidationError('Name is required')
+            
+            # Check duplicates
+            if Color.query.filter_by(name=name).first():
+                raise ConflictError('Color already exists')
+            
+            # Create entity
+            color = Color(name=name)
+            db.session.add(color)
+            db.session.commit()
+            return color.to_dict()
+    ```
+  </Accordion>
+  
+  <Accordion title="forms.py - Input Validation">
+    Defines WTForms for data validation:
+    
+    ```python app/catalogs/colors/forms.py
+    from flask_wtf import FlaskForm
+    from wtforms import StringField, SubmitField
+    from wtforms.validators import DataRequired, Length
+    
+    class ColorForm(FlaskForm):
+        name = StringField(
+            'Nombre',
+            validators=[DataRequired(), Length(max=50)]
+        )
+        submit = SubmitField('Guardar')
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Blueprint Registration
+
+Blueprints are registered in the application factory (`app/__init__.py`) with URL prefixes:
+
+```python app/__init__.py
+def create_app():
+    app = Flask(__name__)
+    
+    # ... configuration and extensions ...
+    
+    # Register blueprints
+    from .catalogs.colors import colors_bp
+    app.register_blueprint(colors_bp, url_prefix='/colors')
+    
+    from .catalogs.roles import roles_bp
+    app.register_blueprint(roles_bp, url_prefix='/roles')
+    
+    from .catalogs.wood_types import woods_types_bp
+    app.register_blueprint(woods_types_bp, url_prefix='/wood-types')
+    
+    from .catalogs.unit_of_measures import unit_of_measures_bp
+    app.register_blueprint(unit_of_measures_bp, url_prefix='/unit-of-measures')
+    
+    return app
+```
+
+<Note>
+The `url_prefix` parameter defines the base path for all routes in the blueprint. For example, routes in `colors_bp` will be accessible at `/colors/*`.
+</Note>
+
+## URL Structure
+
+Each module follows RESTful URL conventions:
+
+| Route | Method | Purpose | Example |
+|-------|--------|---------|----------|
+| `/` | GET | List all items | `/colors/` |
+| `/create` | GET | Show creation form | `/colors/create` |
+| `/create` | POST | Create new item | `/colors/create` |
+| `/<id>/edit` | GET | Show edit form | `/colors/5/edit` |
+| `/<id>/edit` | POST | Update item | `/colors/5/edit` |
+| `/<id>/delete` | POST | Delete item | `/colors/5/delete` |
+
+<Tip>
+This consistent URL structure makes the API predictable and easy to understand.
+</Tip>
+
+## Module Dependencies
+
+### Shared Components
+
+All modules share common components:
+
+```python
+app/
+├── extensions.py        # Flask extensions (db, migrate, csrf)
+├── exceptions.py        # Custom exception classes
+└── models/             # Shared across modules
+```
+
+### Extension Initialization
+
+```python app/extensions.py
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+from flask_wtf.csrf import CSRFProtect
+
+db = SQLAlchemy()
+migrate = Migrate()
+csrf = CSRFProtect()
+```
+
+Extensions are initialized without an app instance, then bound to the app in the factory:
+
+```python
+db.init_app(app)
+migrate.init_app(app, db)
+csrf.init_app(app)
+```
+
+## Template Organization
+
+Templates are organized by module with a shared base:
+
+```
+templates/
+├── base.html           # Base layout
+├── colors/
+│   ├── list.html
+│   ├── create.html
+│   └── edit.html
+├── roles/
+│   ├── list.html
+│   ├── create.html
+│   └── edit.html
+└── errors/
+    └── error.html      # Generic error page
+```
+
+### Base Template
+
+```html templates/base.html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{% block title %}Muebles Roble{% endblock %}</title>
+    {% block styles %}{% endblock %}
+</head>
+<body>
+    <nav>
+        <!-- Navigation menu -->
+    </nav>
+    
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <!-- Page content -->
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>
+```
+
+### Module Template
+
+```html templates/colors/create.html
+{% extends 'base.html' %}
+
+{% block title %}Crear Color - Muebles Roble{% endblock %}
+
+{% block content %}
+<h1>Crear Nuevo Color</h1>
+
+<form method="POST">
+    {{ form.hidden_tag() }}
+    
+    <div class="form-group">
+        {{ form.name.label }}
+        {{ form.name(class="form-control") }}
+        {% if form.name.errors %}
+            {% for error in form.name.errors %}
+                <span class="error">{{ error }}</span>
+            {% endfor %}
+        {% endif %}
+    </div>
+    
+    {{ form.submit(class="btn btn-primary") }}
+</form>
+{% endblock %}
+```
+
+## Creating a New Module
+
+To add a new module to the system, follow these steps:
+
+<Steps>
+  <Step title="Create Module Directory">
+    Create a new directory under `app/catalogs/` (or another appropriate location):
+    
+    ```bash
+    mkdir -p app/catalogs/materials
+    ```
+  </Step>
+  
+  <Step title="Define Blueprint">
+    Create `__init__.py` to define the blueprint:
+    
+    ```python app/catalogs/materials/__init__.py
+    from flask import Blueprint
+    
+    materials_bp = Blueprint('materials', __name__)
+    
+    from . import routes
+    ```
+  </Step>
+  
+  <Step title="Create Service Layer">
+    Create `services.py` with business logic:
+    
+    ```python app/catalogs/materials/services.py
+    from app.models.material import Material
+    
+    class MaterialService:
+        @staticmethod
+        def get_all():
+            return Material.query.filter_by(active=True).all()
+        
+        @staticmethod
+        def create(data: dict):
+            # Business logic here
+            pass
+    ```
+  </Step>
+  
+  <Step title="Create Routes">
+    Create `routes.py` with HTTP handlers:
+    
+    ```python app/catalogs/materials/routes.py
+    from . import materials_bp
+    from .services import MaterialService
+    
+    @materials_bp.route('/', methods=['GET'])
+    def list_materials():
+        materials = MaterialService.get_all()
+        return render_template('materials/list.html', 
+                             materials=materials)
+    ```
+  </Step>
+  
+  <Step title="Create Forms">
+    Create `forms.py` with validation:
+    
+    ```python app/catalogs/materials/forms.py
+    from flask_wtf import FlaskForm
+    from wtforms import StringField, SubmitField
+    from wtforms.validators import DataRequired
+    
+    class MaterialForm(FlaskForm):
+        name = StringField('Nombre', validators=[DataRequired()])
+        submit = SubmitField('Guardar')
+    ```
+  </Step>
+  
+  <Step title="Create Model">
+    Create the data model in `app/models/material.py`:
+    
+    ```python app/models/material.py
+    from app.extensions import db
+    from sqlalchemy.sql import func
+    
+    class Material(db.Model):
+        __tablename__ = 'materials'
+        
+        id_material = db.Column(db.Integer, primary_key=True)
+        name = db.Column(db.String(100), nullable=False, unique=True)
+        active = db.Column(db.Boolean, default=True)
+        created_at = db.Column(db.TIMESTAMP, 
+                              server_default=func.current_timestamp())
+    ```
+  </Step>
+  
+  <Step title="Register Blueprint">
+    Register the blueprint in `app/__init__.py`:
+    
+    ```python
+    from .catalogs.materials import materials_bp
+    app.register_blueprint(materials_bp, url_prefix='/materials')
+    ```
+  </Step>
+  
+  <Step title="Create Templates">
+    Create template files in `templates/materials/`:
+    - `list.html` - List view
+    - `create.html` - Creation form
+    - `edit.html` - Edit form
+  </Step>
+  
+  <Step title="Generate Migration">
+    Create a database migration:
+    
+    ```bash
+    flask db migrate -m "Add materials table"
+    flask db upgrade
+    ```
+  </Step>
+</Steps>
+
+## Module Best Practices
+
+<AccordionGroup>
+  <Accordion title="Keep Modules Independent">
+    Each module should be self-contained and not depend on other modules. Share common functionality through services or utilities.
+  </Accordion>
+  
+  <Accordion title="Use Consistent Naming">
+    Follow naming conventions:
+    - Blueprint: `{module_name}_bp`
+    - Service: `{ModuleName}Service`
+    - Form: `{ModuleName}Form`
+    - Model: `{ModuleName}`
+  </Accordion>
+  
+  <Accordion title="Maintain Route Structure">
+    Stick to the standard REST-style routes for consistency across modules.
+  </Accordion>
+  
+  <Accordion title="Handle Exceptions Properly">
+    Always catch and handle service exceptions in routes, providing appropriate user feedback.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Database Models" icon="database" href="/architecture/database/models">
+    Learn about model definitions and relationships
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/architecture/error-handling">
+    Understand the exception hierarchy
+  </Card>
+</CardGroup>

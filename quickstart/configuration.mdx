@@ -1,0 +1,507 @@
+---
+title: Configuration Guide
+description: Configure database connection, environment variables, and application settings for Muebles Roble
+---
+
+# Configuration Guide
+
+Before running Muebles Roble, you need to configure the database connection and set up environment variables. This guide walks you through the complete configuration process.
+
+<Info>
+  All sensitive configuration data is stored in environment variables using a `.env` file, never hard-coded in the application.
+</Info>
+
+## Environment Variables Setup
+
+<Steps>
+  <Step title="Locate the Template File">
+    The project includes a `.env-template` file that serves as a reference for all required environment variables:
+    
+    ```bash
+    # .env-template
+    FLASK_APP=app.py
+    FLASK_ENV=development
+    
+    DB_USER=example_user
+    DB_PASSWORD=example_password
+    DB_HOST=localhost
+    DB_PORT=3306
+    DB_NAME=example_db
+    ```
+    
+    <Warning>
+      Do NOT delete the `.env-template` file. It serves as documentation for required variables.
+    </Warning>
+  </Step>
+  
+  <Step title="Create Your .env File">
+    Copy the template to create your actual environment file:
+    
+    ```bash
+    cp .env-template .env
+    ```
+    
+    On Windows (Command Prompt):
+    ```cmd
+    copy .env-template .env
+    ```
+    
+    On Windows (PowerShell):
+    ```powershell
+    Copy-Item .env-template .env
+    ```
+  </Step>
+  
+  <Step title="Configure Database Variables">
+    Open the `.env` file in your text editor and update the database credentials:
+    
+    ```bash
+    # Flask Configuration
+    FLASK_APP=app.py
+    FLASK_ENV=development
+    
+    # Database Configuration
+    DB_USER=your_mysql_username
+    DB_PASSWORD=your_mysql_password
+    DB_HOST=localhost
+    DB_PORT=3306
+    DB_NAME=muebles_roble_db
+    ```
+    
+    Replace the values with your actual MySQL credentials.
+  </Step>
+  
+  <Step title="Add Secret Key (Optional but Recommended)">
+    For production or better security, add a SECRET_KEY:
+    
+    ```bash
+    # Add this line to your .env file
+    SECRET_KEY=your-secret-key-here-make-it-random-and-long
+    ```
+    
+    Generate a secure secret key using Python:
+    ```python
+    python -c "import secrets; print(secrets.token_hex(32))"
+    ```
+    
+    <Tip>
+      In development, the app will use a default secret key if you don't set one. In production, it's required.
+    </Tip>
+  </Step>
+</Steps>
+
+## Environment Variables Reference
+
+### Flask Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `FLASK_APP` | No | `app.py` | Entry point for Flask CLI commands |
+| `FLASK_ENV` | No | `production` | Environment mode: `development` or `production` |
+| `SECRET_KEY` | Production only | `dev-secret-key...` | Secret key for session management and CSRF protection |
+
+### Database Variables
+
+| Variable | Required | Example | Description |
+|----------|----------|---------|-------------|
+| `DB_USER` | Yes | `root` | MySQL database username |
+| `DB_PASSWORD` | Yes | `mypassword` | MySQL database password |
+| `DB_HOST` | Yes | `localhost` | Database server hostname or IP |
+| `DB_PORT` | Yes | `3306` | MySQL server port (default: 3306) |
+| `DB_NAME` | Yes | `muebles_roble_db` | Name of the database to use |
+
+## Configuration File Structure
+
+The `config.py` file loads and processes these environment variables:
+
+```python
+import os
+from dotenv import load_dotenv
+
+load_dotenv()  # Load variables from .env file
+
+class Config:
+    # Database configuration from environment
+    DB_USER = os.getenv("DB_USER")
+    DB_PASSWORD = os.getenv("DB_PASSWORD")
+    DB_HOST = os.getenv("DB_HOST")
+    DB_PORT = os.getenv("DB_PORT")
+    DB_NAME = os.getenv("DB_NAME")
+    
+    # Construct SQLAlchemy database URI
+    SQLALCHEMY_DATABASE_URI = (
+        f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    )
+    
+    # Disable modification tracking (not needed, improves performance)
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    
+    # Secret key with production safety
+    SECRET_KEY = os.getenv("SECRET_KEY")
+    if not SECRET_KEY:
+        if os.getenv("FLASK_ENV") == "production":
+            raise ValueError("SECRET_KEY must be set in production environment")
+        SECRET_KEY = "dev-secret-key-change-in-production"
+```
+
+### How It Works
+
+<Accordion title="1. Loading Environment Variables">
+  The `load_dotenv()` function reads your `.env` file and loads all variables into `os.environ`.
+</Accordion>
+
+<Accordion title="2. Constructing Database URI">
+  SQLAlchemy requires a connection string in this format:
+  ```
+  mysql+pymysql://username:password@host:port/database
+  ```
+  
+  The config builds this from individual environment variables.
+</Accordion>
+
+<Accordion title="3. Secret Key Safety">
+  In production (`FLASK_ENV=production`), the app will crash if SECRET_KEY is not set. This prevents running production with insecure defaults.
+</Accordion>
+
+<Accordion title="4. Configuration Loading">
+  The Flask app factory loads this configuration:
+  ```python
+  # app/__init__.py
+  def create_app():
+      app = Flask(__name__)
+      app.config.from_object(Config)  # Load Config class
+      # ...
+  ```
+</Accordion>
+
+## Database Setup
+
+<Steps>
+  <Step title="Install MySQL Server">
+    Ensure MySQL is installed and running on your system:
+    
+    - **Windows:** [MySQL Installer](https://dev.mysql.com/downloads/installer/)
+    - **macOS:** `brew install mysql` or [MySQL DMG](https://dev.mysql.com/downloads/mysql/)
+    - **Linux:** `sudo apt-get install mysql-server` (Ubuntu/Debian)
+    
+    Start the MySQL service:
+    ```bash
+    # macOS
+    brew services start mysql
+    
+    # Linux
+    sudo systemctl start mysql
+    
+    # Windows - MySQL runs as a service automatically
+    ```
+  </Step>
+  
+  <Step title="Create Database">
+    Connect to MySQL and create the database:
+    
+    ```bash
+    mysql -u root -p
+    ```
+    
+    Enter your MySQL root password, then:
+    
+    ```sql
+    CREATE DATABASE muebles_roble_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    ```
+    
+    Verify the database was created:
+    ```sql
+    SHOW DATABASES;
+    ```
+    
+    Exit MySQL:
+    ```sql
+    EXIT;
+    ```
+  </Step>
+  
+  <Step title="Create Database User (Optional)">
+    For better security, create a dedicated user instead of using root:
+    
+    ```sql
+    CREATE USER 'muebles_user'@'localhost' IDENTIFIED BY 'secure_password';
+    GRANT ALL PRIVILEGES ON muebles_roble_db.* TO 'muebles_user'@'localhost';
+    FLUSH PRIVILEGES;
+    ```
+    
+    Update your `.env` file:
+    ```bash
+    DB_USER=muebles_user
+    DB_PASSWORD=secure_password
+    ```
+  </Step>
+  
+  <Step title="Test Database Connection">
+    The application automatically tests the database connection when it starts. Run:
+    
+    ```bash
+    python run.py
+    ```
+    
+    You should see:
+    ```
+    Database connection successful!
+    ```
+    
+    If you see an error, verify your database credentials in `.env`.
+  </Step>
+</Steps>
+
+## Database Connection String Examples
+
+Here are example connection strings for different scenarios:
+
+### Local MySQL (Standard)
+
+```bash
+DB_USER=root
+DB_PASSWORD=mypassword
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=muebles_roble_db
+```
+
+Results in:
+```
+mysql+pymysql://root:mypassword@localhost:3306/muebles_roble_db
+```
+
+### Remote MySQL Server
+
+```bash
+DB_USER=admin
+DB_PASSWORD=secure123
+DB_HOST=192.168.1.100
+DB_PORT=3306
+DB_NAME=muebles_roble_db
+```
+
+Results in:
+```
+mysql+pymysql://admin:secure123@192.168.1.100:3306/muebles_roble_db
+```
+
+### Custom Port
+
+```bash
+DB_USER=root
+DB_PASSWORD=pass
+DB_HOST=localhost
+DB_PORT=3307
+DB_NAME=muebles_roble_db
+```
+
+Results in:
+```
+mysql+pymysql://root:pass@localhost:3307/muebles_roble_db
+```
+
+## Running Database Migrations
+
+After configuring the database, you'll need to create the tables:
+
+<Steps>
+  <Step title="Initialize Migrations">
+    If migrations haven't been initialized yet:
+    
+    ```bash
+    flask db init
+    ```
+    
+    This creates a `migrations/` folder.
+    
+    <Note>
+      This step may already be done in the repository. Only run it if the `migrations/` folder doesn't exist.
+    </Note>
+  </Step>
+  
+  <Step title="Create Initial Migration">
+    Generate a migration from your models:
+    
+    ```bash
+    flask db migrate -m "Initial tables"
+    ```
+    
+    This analyzes your models and creates migration scripts in `migrations/versions/`.
+  </Step>
+  
+  <Step title="Apply Migrations">
+    Apply the migration to create tables:
+    
+    ```bash
+    flask db upgrade
+    ```
+    
+    This executes the migration scripts and creates all tables in your database.
+  </Step>
+  
+  <Step title="Verify Tables">
+    Connect to MySQL and verify tables were created:
+    
+    ```sql
+    USE muebles_roble_db;
+    SHOW TABLES;
+    ```
+    
+    You should see tables like:
+    - `colors`
+    - `wood_types`
+    - `furniture_types`
+    - `unit_of_measures`
+    - `roles`
+    - `alembic_version` (migration tracking)
+  </Step>
+</Steps>
+
+## Environment-Specific Configuration
+
+### Development Environment
+
+For local development, use these settings:
+
+```bash
+# .env
+FLASK_APP=app.py
+FLASK_ENV=development
+FLASK_DEBUG=1
+
+DB_USER=root
+DB_PASSWORD=root
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=muebles_roble_dev
+
+# Optional in development
+SECRET_KEY=dev-secret-key
+```
+
+<Info>
+  Development mode enables debug mode, auto-reloading, and detailed error pages.
+</Info>
+
+### Production Environment
+
+For production deployment:
+
+```bash
+# .env
+FLASK_APP=app.py
+FLASK_ENV=production
+
+DB_USER=production_user
+DB_PASSWORD=very_secure_password_here
+DB_HOST=db.example.com
+DB_PORT=3306
+DB_NAME=muebles_roble_prod
+
+# REQUIRED in production
+SECRET_KEY=generate_a_random_secure_key_here
+```
+
+<Warning>
+  Never commit your `.env` file to version control. The `.gitignore` file should include `.env`.
+</Warning>
+
+## Troubleshooting Configuration Issues
+
+<Accordion title="Database connection fails">
+  **Error:** `Database connection failed: Access denied`
+  
+  **Solutions:**
+  - Verify `DB_USER` and `DB_PASSWORD` are correct
+  - Check that MySQL is running: `mysql -u root -p`
+  - Ensure the user has permissions: `SHOW GRANTS FOR 'user'@'localhost';`
+  - Verify the database exists: `SHOW DATABASES;`
+</Accordion>
+
+<Accordion title="Can't connect to MySQL server">
+  **Error:** `Can't connect to MySQL server on 'localhost'`
+  
+  **Solutions:**
+  - Check MySQL is running: `systemctl status mysql` (Linux) or `brew services list` (macOS)
+  - Verify `DB_HOST` and `DB_PORT` are correct
+  - Check firewall settings if connecting to a remote server
+  - Try connecting manually: `mysql -h localhost -P 3306 -u root -p`
+</Accordion>
+
+<Accordion title="Environment variables not loading">
+  **Error:** Variables are `None` or using defaults
+  
+  **Solutions:**
+  - Ensure `.env` file is in the project root (same directory as `run.py`)
+  - Check file is named `.env` exactly (not `.env.txt`)
+  - Verify `python-dotenv` is installed: `pip list | grep dotenv`
+  - Add print statement to verify: `print(os.getenv("DB_USER"))`
+</Accordion>
+
+<Accordion title="SECRET_KEY error in production">
+  **Error:** `ValueError: SECRET_KEY must be set in production environment`
+  
+  **Solutions:**
+  - Add `SECRET_KEY` to your `.env` file
+  - Generate a secure key: `python -c "import secrets; print(secrets.token_hex(32))"`
+  - Ensure `FLASK_ENV=production` is set correctly
+</Accordion>
+
+<Accordion title="Migration errors">
+  **Error:** `Target database is not up to date`
+  
+  **Solutions:**
+  - Run migrations: `flask db upgrade`
+  - Check migration status: `flask db current`
+  - View migration history: `flask db history`
+  - If needed, downgrade and reapply: `flask db downgrade` then `flask db upgrade`
+</Accordion>
+
+## Security Best Practices
+
+<Warning>
+  Follow these security practices for production deployments:
+</Warning>
+
+1. **Never commit `.env` files** - Add `.env` to `.gitignore`
+2. **Use strong passwords** - Generate random passwords for database users
+3. **Set SECRET_KEY** - Use a cryptographically random string
+4. **Restrict database users** - Grant only necessary permissions
+5. **Use environment variables** - Never hard-code credentials
+6. **Enable SSL** - Use encrypted database connections in production
+7. **Regular backups** - Implement automated database backups
+
+## Verifying Configuration
+
+You can verify your configuration is correct:
+
+```python
+# test_config.py
+from config import Config
+
+print("Database URI:", Config.SQLALCHEMY_DATABASE_URI)
+print("Secret Key Set:", bool(Config.SECRET_KEY))
+print("Track Modifications:", Config.SQLALCHEMY_TRACK_MODIFICATIONS)
+```
+
+Run it:
+```bash
+python test_config.py
+```
+
+<Tip>
+  Don't print the actual SECRET_KEY or passwords in production logs!
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="First Steps" icon="rocket" href="/quickstart/first-steps">
+    Run the application and create your first catalog entries
+  </Card>
+  
+  <Card title="Features" icon="star" href="/features">
+    Learn about all available features and capabilities
+  </Card>
+</CardGroup>

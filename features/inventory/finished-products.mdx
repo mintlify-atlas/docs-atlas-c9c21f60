@@ -1,0 +1,443 @@
+---
+title: Finished Products Inventory
+description: Track completed furniture items ready for sale or delivery
+---
+
+## Overview
+
+The Finished Products Inventory module manages completed furniture items that have completed the production process and are ready for sale, delivery, or storage.
+
+<Info>
+This feature is planned for future implementation as part of the complete production management system.
+</Info>
+
+## Purpose
+
+Finished products inventory provides:
+
+- Stock tracking for completed furniture items
+- Product classification using [Furniture Types](/features/catalogs/furniture-types)
+- Quality control status tracking
+- Product location management
+- Sales order fulfillment
+- Product traceability to source materials and production batches
+
+## Planned Architecture
+
+The finished products module will follow the established pattern:
+
+```
+┌─────────────────────────────────────┐
+│  app/inventory/finished_products/   │
+├─────────────────────────────────────┤
+│  routes.py                          │
+│  - List products                    │
+│  - View product details             │
+│  - Update stock                     │
+│  - Record sales/shipments           │
+├─────────────────────────────────────┤
+│  services.py                        │
+│  - Stock calculations               │
+│  - Product valuation                │
+│  - Availability checks              │
+├─────────────────────────────────────┤
+│  models/                            │
+│  - FinishedProduct                  │
+│  - ProductionCompletion             │
+│  - ProductShipment                  │
+└─────────────────────────────────────┘
+```
+
+## Data Model Design
+
+### FinishedProduct Model
+
+The proposed `FinishedProduct` model will include:
+
+```python
+class FinishedProduct(db.Model):
+    __tablename__ = 'finished_products'
+    
+    id_product = db.Column(db.Integer, primary_key=True)
+    product_code = db.Column(db.String(50), unique=True, nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    
+    # Foreign keys to catalogs
+    furniture_type_id = db.Column(db.Integer, db.ForeignKey('furniture_type.id_furniture_type'))
+    wood_type_id = db.Column(db.Integer, db.ForeignKey('wood_types.id_wood_type'))
+    color_id = db.Column(db.Integer, db.ForeignKey('colors.id_color'))
+    
+    # Dimensions
+    length = db.Column(db.Numeric(10, 2), nullable=True)
+    width = db.Column(db.Numeric(10, 2), nullable=True)
+    height = db.Column(db.Numeric(10, 2), nullable=True)
+    dimension_unit_id = db.Column(db.Integer, db.ForeignKey('unit_of_measures.id_unit_of_measure'))
+    
+    # Stock information
+    quantity_in_stock = db.Column(db.Integer, default=0)
+    minimum_stock = db.Column(db.Integer, default=0)
+    
+    # Pricing
+    production_cost = db.Column(db.Numeric(10, 2), nullable=True)
+    selling_price = db.Column(db.Numeric(10, 2), nullable=True)
+    
+    # Quality status
+    quality_status = db.Column(db.String(20), default='PENDING')  # PENDING, APPROVED, REJECTED
+    
+    # Standard audit fields
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.TIMESTAMP, server_default=func.current_timestamp())
+    updated_at = db.Column(db.TIMESTAMP, server_onupdate=func.current_timestamp())
+    deleted_at = db.Column(db.TIMESTAMP, nullable=True)
+    
+    # Relationships
+    furniture_type = db.relationship('FurnitureType', backref='products')
+    wood_type = db.relationship('WoodType', backref='products')
+    color = db.relationship('Color', backref='products')
+    dimension_unit = db.relationship('UnitOfMeasure')
+```
+
+### ProductionCompletion Model
+
+Records when products finish production:
+
+```python
+class ProductionCompletion(db.Model):
+    __tablename__ = 'production_completions'
+    
+    id_completion = db.Column(db.Integer, primary_key=True)
+    completion_date = db.Column(db.DateTime, nullable=False)
+    
+    product_id = db.Column(db.Integer, db.ForeignKey('finished_products.id_product'))
+    production_order_id = db.Column(db.Integer, nullable=True)  # Link to production module
+    
+    quantity_completed = db.Column(db.Integer, nullable=False)
+    quantity_defective = db.Column(db.Integer, default=0)
+    
+    quality_inspector = db.Column(db.String(100), nullable=True)
+    quality_notes = db.Column(db.Text, nullable=True)
+    
+    created_at = db.Column(db.TIMESTAMP, server_default=func.current_timestamp())
+    created_by = db.Column(db.String(100), nullable=True)
+    
+    # Relationships
+    product = db.relationship('FinishedProduct', backref='completions')
+```
+
+### ProductShipment Model
+
+Tracks outgoing products:
+
+```python
+class ProductShipment(db.Model):
+    __tablename__ = 'product_shipments'
+    
+    id_shipment = db.Column(db.Integer, primary_key=True)
+    shipment_date = db.Column(db.Date, nullable=False)
+    
+    product_id = db.Column(db.Integer, db.ForeignKey('finished_products.id_product'))
+    quantity_shipped = db.Column(db.Integer, nullable=False)
+    
+    customer_name = db.Column(db.String(100), nullable=True)
+    order_number = db.Column(db.String(50), nullable=True)
+    shipping_address = db.Column(db.Text, nullable=True)
+    
+    shipment_status = db.Column(db.String(20), default='PENDING')  # PENDING, SHIPPED, DELIVERED
+    
+    notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.TIMESTAMP, server_default=func.current_timestamp())
+    created_by = db.Column(db.String(100), nullable=True)
+    
+    # Relationships
+    product = db.relationship('FinishedProduct', backref='shipments')
+```
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Product Catalog" icon="book">
+    Complete catalog of finished furniture items with specifications
+  </Card>
+  <Card title="Stock Levels" icon="warehouse">
+    Real-time inventory counts and availability
+  </Card>
+  <Card title="Quality Control" icon="clipboard-check">
+    Track quality inspection status and defects
+  </Card>
+  <Card title="Order Fulfillment" icon="truck">
+    Manage shipments and delivery tracking
+  </Card>
+</CardGroup>
+
+## Planned Service Methods
+
+### FinishedProductService
+
+```python
+class FinishedProductService:
+    @staticmethod
+    def get_all_in_stock() -> list[FinishedProduct]:
+        """Get all products with stock > 0."""
+        return FinishedProduct.query.filter(
+            FinishedProduct.active == True,
+            FinishedProduct.quantity_in_stock > 0
+        ).all()
+    
+    @staticmethod
+    def get_by_furniture_type(furniture_type_id: int) -> list[FinishedProduct]:
+        """Get all products of specific furniture type."""
+        return FinishedProduct.query.filter_by(
+            furniture_type_id=furniture_type_id,
+            active=True
+        ).all()
+    
+    @staticmethod
+    def create(data: dict) -> dict:
+        """Create a new product definition."""
+        # Validates catalog references exist
+        # Generates unique product code
+        # Creates product record
+        pass
+    
+    @staticmethod
+    def check_availability(product_id: int, quantity: int) -> bool:
+        """Check if requested quantity is available."""
+        product = FinishedProduct.query.get(product_id)
+        return product.quantity_in_stock >= quantity
+    
+    @staticmethod
+    def get_inventory_value() -> float:
+        """Calculate total inventory value."""
+        # Sum of (quantity * production_cost) for all products
+        pass
+```
+
+### ProductionCompletionService
+
+```python
+class ProductionCompletionService:
+    @staticmethod
+    def record_completion(data: dict) -> dict:
+        """Record completed production batch."""
+        # Creates completion record
+        # Updates product stock
+        # Records quality inspection results
+        # Links to production order
+        pass
+    
+    @staticmethod
+    def get_completions_by_date_range(start_date, end_date) -> list[ProductionCompletion]:
+        """Get all completions within date range."""
+        pass
+    
+    @staticmethod
+    def calculate_defect_rate(product_id: int) -> float:
+        """Calculate defect percentage for product."""
+        # (Total defective / Total completed) * 100
+        pass
+```
+
+### ProductShipmentService
+
+```python
+class ProductShipmentService:
+    @staticmethod
+    def create_shipment(data: dict) -> dict:
+        """Create new shipment record."""
+        # Validates stock availability
+        # Creates shipment record
+        # Reduces product stock
+        # Generates shipment documentation
+        pass
+    
+    @staticmethod
+    def update_shipment_status(shipment_id: int, status: str) -> None:
+        """Update shipment status."""
+        # Updates status to SHIPPED or DELIVERED
+        pass
+    
+    @staticmethod
+    def get_pending_shipments() -> list[ProductShipment]:
+        """Get all shipments not yet delivered."""
+        pass
+```
+
+## Planned Routes
+
+### Product Management
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/inventory/products/` | GET | List all finished products |
+| `/inventory/products/create` | GET/POST | Create new product definition |
+| `/inventory/products/<id>/edit` | GET/POST | Edit product details |
+| `/inventory/products/<id>` | GET | View product details |
+| `/inventory/products/by-type/<type_id>` | GET | Filter by furniture type |
+
+### Production Completions
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/inventory/completions/` | GET | List recent completions |
+| `/inventory/completions/create` | GET/POST | Record production completion |
+| `/inventory/completions/<id>` | GET | View completion details |
+
+### Shipments
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/inventory/shipments/` | GET | List all shipments |
+| `/inventory/shipments/create` | GET/POST | Create new shipment |
+| `/inventory/shipments/<id>` | GET | View shipment details |
+| `/inventory/shipments/<id>/status` | POST | Update shipment status |
+
+## Integration with Catalogs
+
+Finished products leverage existing catalog data:
+
+<Steps>
+  <Step title="Furniture Type">
+    Categorizes the product (Table, Chair, Closet)
+  </Step>
+  <Step title="Wood Type">
+    Specifies the primary wood material used
+  </Step>
+  <Step title="Color">
+    Defines the finish color applied
+  </Step>
+  <Step title="Units of Measure">
+    Measures product dimensions
+  </Step>
+</Steps>
+
+### Example Product Definition
+
+```python
+product_data = {
+    "product_code": "TBL-OAK-NAT-001",
+    "name": "Oak Dining Table",
+    "description": "6-person solid oak dining table with natural finish",
+    "furniture_type_id": 1,  # Table
+    "wood_type_id": 2,       # Oak
+    "color_id": 5,           # Natural
+    "length": 200,
+    "width": 100,
+    "height": 75,
+    "dimension_unit_id": 2,  # Centimeters
+    "minimum_stock": 2,
+    "production_cost": 450.00,
+    "selling_price": 750.00
+}
+
+product = FinishedProductService.create(product_data)
+```
+
+## Quality Control Workflow
+
+<Steps>
+  <Step title="Production Completion">
+    Items finish production and are inspected
+  </Step>
+  <Step title="Quality Inspection">
+    Inspector examines items for defects
+  </Step>
+  <Step title="Status Assignment">
+    Products marked as APPROVED or REJECTED
+  </Step>
+  <Step title="Stock Update">
+    Only approved items added to saleable inventory
+  </Step>
+</Steps>
+
+### Recording a Completion
+
+```python
+completion_data = {
+    "completion_date": "2024-03-15 14:30:00",
+    "product_id": 10,
+    "production_order_id": 55,
+    "quantity_completed": 10,
+    "quantity_defective": 1,
+    "quality_inspector": "Maria Rodriguez",
+    "quality_notes": "1 unit with finish imperfections"
+}
+
+# Service handles:
+# 1. Create completion record
+# 2. Update product stock (+9 approved units)
+# 3. Record defect for tracking
+result = ProductionCompletionService.record_completion(completion_data)
+```
+
+## Traceability
+
+Finished products maintain complete traceability:
+
+```python
+# Get product history
+product = FinishedProduct.query.get(product_id)
+
+# Trace to production
+for completion in product.completions:
+    print(f"Completed: {completion.completion_date}")
+    print(f"Order: {completion.production_order_id}")
+    # Production order links to raw materials used
+
+# Trace to shipments
+for shipment in product.shipments:
+    print(f"Shipped: {shipment.shipment_date}")
+    print(f"Customer: {shipment.customer_name}")
+```
+
+## Reports and Analytics
+
+Planned reporting capabilities:
+
+<CardGroup cols={2}>
+  <Card title="Stock Status Report">
+    Current inventory by product, type, and value
+  </Card>
+  <Card title="Production Summary">
+    Completions by date, product, and quality metrics
+  </Card>
+  <Card title="Shipment Report">
+    Deliveries by date, customer, and status
+  </Card>
+  <Card title="Defect Analysis">
+    Quality issues by product and time period
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<Accordion title="Product Coding Standards">
+  Use consistent product codes:
+  - Format: `[TYPE]-[WOOD]-[COLOR]-[SEQ]`
+  - Example: `TBL-OAK-NAT-001`
+  - Makes products easy to identify and search
+</Accordion>
+
+<Accordion title="Minimum Stock Levels">
+  Set minimum stock based on:
+  - Average monthly sales
+  - Production lead time
+  - Customer demand patterns
+  - Storage capacity
+</Accordion>
+
+<Accordion title="Quality Documentation">
+  Maintain detailed quality records:
+  - Document all defects found
+  - Track defect patterns by product
+  - Use data to improve production
+  - Keep photos of quality issues
+</Accordion>
+
+## Related Documentation
+
+- [Furniture Types Catalog](/features/catalogs/furniture-types) - Product categories
+- [Wood Types Catalog](/features/catalogs/wood-types) - Material specifications
+- [Colors Catalog](/features/catalogs/colors) - Finish options
+- [Production Workflow](/features/production/workflow) - Manufacturing process
+- [Production Traceability](/features/production/traceability) - Material tracking

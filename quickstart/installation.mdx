@@ -1,0 +1,367 @@
+---
+title: Installation Guide
+description: Step-by-step instructions to install Muebles Roble, including Python setup, virtual environment creation, and dependency installation
+---
+
+# Installation Guide
+
+This guide will walk you through installing Muebles Roble on your local machine. The entire process takes about 10-15 minutes.
+
+<Info>
+  Muebles Roble requires **Python 3.10.11** specifically. Make sure you have the correct version installed before proceeding.
+</Info>
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+- **Python 3.10.11** installed
+- **pip** package manager (included with Python)
+- **MySQL** database server running
+- **Git** for cloning the repository
+- A terminal/command prompt
+
+### Verify Python Version
+
+First, check that you have the correct Python version:
+
+```bash
+python --version
+```
+
+You should see:
+
+```
+Python 3.10.11
+```
+
+<Warning>
+  The application is tested with Python 3.10.11. Other versions may work but are not officially supported.
+</Warning>
+
+### Verify pip Installation
+
+```bash
+pip --version
+```
+
+You should see output showing pip is installed with Python 3.10.
+
+## Installation Steps
+
+<Steps>
+  <Step title="Clone the Repository">
+    Clone the Muebles Roble repository to your local machine:
+    
+    ```bash
+    git clone <URL_DEL_REPOSITORIO>
+    cd muebles-roble-diseno-app
+    ```
+    
+    <Note>
+      Replace `<URL_DEL_REPOSITORIO>` with the actual repository URL provided by your team or instructor.
+    </Note>
+  </Step>
+  
+  <Step title="Create Virtual Environment">
+    Create an isolated Python environment for the project:
+    
+    ```bash
+    python -m venv venv
+    ```
+    
+    This creates a `venv/` directory containing a standalone Python installation.
+    
+    <Info>
+      Virtual environments prevent dependency conflicts between different Python projects.
+    </Info>
+  </Step>
+  
+  <Step title="Activate Virtual Environment">
+    Activate the virtual environment based on your operating system:
+    
+    <CodeGroup>
+    ```bash Windows
+    venv\Scripts\activate
+    ```
+    
+    ```bash macOS/Linux
+    source venv/bin/activate
+    ```
+    </CodeGroup>
+    
+    When activated successfully, you'll see `(venv)` prefix in your terminal:
+    
+    ```
+    (venv) C:\Users\YourName\muebles-roble-diseno-app>
+    ```
+    
+    <Tip>
+      You need to activate the virtual environment every time you open a new terminal session to work on the project.
+    </Tip>
+  </Step>
+  
+  <Step title="Install Dependencies">
+    Install all required Python packages from `requirements.txt`:
+    
+    ```bash
+    pip install -r requirements.txt
+    ```
+    
+    This will install the following packages:
+    
+    | Package | Version | Purpose |
+    |---------|---------|--------|
+    | Flask | 3.1.2 | Web framework |
+    | Flask-SQLAlchemy | 3.1.1 | ORM for database |
+    | Flask-Migrate | 4.1.0 | Database migrations |
+    | Flask-WTF | 1.2.2 | Form handling & CSRF |
+    | PyMySQL | 1.1.2 | MySQL driver |
+    | python-dotenv | 1.2.1 | Environment variables |
+    | WTForms | 3.2.1 | Form validation |
+    | SQLAlchemy | 2.0.46 | SQL toolkit |
+    | alembic | 1.18.4 | Migration tool |
+    
+    Plus development tools:
+    - `black` - Code formatter
+    - `mypy` - Type checker
+    
+    The installation may take a few minutes depending on your internet connection.
+  </Step>
+  
+  <Step title="Verify Installation">
+    Verify that Flask is installed correctly:
+    
+    ```bash
+    flask --version
+    ```
+    
+    You should see output similar to:
+    
+    ```
+    Python 3.10.11
+    Flask 3.1.2
+    Werkzeug 3.1.5
+    ```
+  </Step>
+</Steps>
+
+## Project Structure
+
+After installation, your project directory should look like this:
+
+```
+muebles-roble-diseno-app/
+│
+├── venv/                         # Virtual environment (created)
+│   ├── Scripts/                  # Windows executables
+│   ├── bin/                      # Unix executables
+│   └── Lib/                      # Installed packages
+│
+├── app/                          # Application package
+│   ├── __init__.py               # Flask app factory
+│   ├── extensions.py             # Flask extensions
+│   ├── exceptions.py             # Custom exceptions
+│   │
+│   ├── catalogs/                 # Catalog modules
+│   │   ├── colors/
+│   │   ├── wood_types/
+│   │   ├── furniture_type/
+│   │   ├── unit_of_measures/
+│   │   └── roles/
+│   │
+│   ├── models/                   # Database models
+│   │   ├── color.py
+│   │   ├── wood_type.py
+│   │   ├── furniture_type.py
+│   │   ├── unit_of_measure.py
+│   │   └── role.py
+│   │
+│   └── templates/                # Jinja2 templates
+│       ├── base.html
+│       └── colors/
+│
+├── docs/                         # Documentation
+│   ├── ARCHITECTURE.md
+│   └── CODING_CONVENTIONS.md
+│
+├── config.py                     # Configuration
+├── run.py                        # Application entry point
+├── requirements.txt              # Python dependencies
+├── .env-template                 # Environment template
+├── .gitignore                    # Git ignore rules
+└── README.md                     # Project readme
+```
+
+## Understanding Key Files
+
+### run.py - Entry Point
+
+The `run.py` file is your application's entry point:
+
+```python
+from app import create_app
+from app.extensions import db
+
+app = create_app()
+
+# Test database connection
+with app.app_context():
+    try:
+        connection = db.engine.connect()
+        print("Database connection successful!")
+        connection.close()
+    except Exception as e:
+        print(f"Database connection failed: {e}")
+
+if __name__ == '__main__':
+    app.run(debug=True)
+```
+
+This file:
+- Creates the Flask application using the factory pattern
+- Tests the database connection on startup
+- Runs the development server with debug mode enabled
+
+### config.py - Configuration
+
+The `config.py` file manages all configuration:
+
+```python
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+class Config:
+    DB_USER = os.getenv("DB_USER")
+    DB_PASSWORD = os.getenv("DB_PASSWORD")
+    DB_HOST = os.getenv("DB_HOST")
+    DB_PORT = os.getenv("DB_PORT")
+    DB_NAME = os.getenv("DB_NAME")
+    
+    SQLALCHEMY_DATABASE_URI = (
+        f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    )
+    
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    
+    SECRET_KEY = os.getenv("SECRET_KEY")
+    if not SECRET_KEY:
+        if os.getenv("FLASK_ENV") == "production":
+            raise ValueError("SECRET_KEY must be set in production")
+        SECRET_KEY = "dev-secret-key-change-in-production"
+```
+
+<Warning>
+  Never commit your `.env` file to version control. It contains sensitive credentials.
+</Warning>
+
+### requirements.txt - Dependencies
+
+The complete dependency list:
+
+```txt
+alembic==1.18.4
+black==26.1.0
+blinker==1.9.0
+cffi==2.0.0
+click==8.3.1
+colorama==0.4.6
+cryptography==46.0.5
+Flask==3.1.2
+Flask-Migrate==4.1.0
+Flask-SQLAlchemy==3.1.1
+Flask-WTF==1.2.2
+greenlet==3.3.1
+itsdangerous==2.2.0
+Jinja2==3.1.6
+librt==0.8.1
+Mako==1.3.10
+MarkupSafe==3.0.3
+mypy==1.19.1
+mypy_extensions==1.1.0
+packaging==26.0
+pathspec==1.0.4
+platformdirs==4.9.2
+psycopg2-binary==2.9.11
+pycparser==3.0
+PyMySQL==1.1.2
+python-dotenv==1.2.1
+pytokens==0.4.1
+SQLAlchemy==2.0.46
+sqlalchemy-stubs==0.4
+tomli==2.4.0
+types-Flask-SQLAlchemy==2.5.9.4
+types-SQLAlchemy==1.4.53.38
+typing_extensions==4.15.0
+Werkzeug==3.1.5
+WTForms==3.2.1
+```
+
+## Common Installation Issues
+
+<Accordion title="Python version mismatch">
+  **Problem:** `python --version` shows a different version.
+  
+  **Solution:** Install Python 3.10.11 from [python.org](https://www.python.org/downloads/) and ensure it's in your PATH. You may need to use `python3.10` instead of `python`.
+</Accordion>
+
+<Accordion title="pip not found">
+  **Problem:** `pip: command not found`
+  
+  **Solution:** Install pip using:
+  ```bash
+  python -m ensurepip --upgrade
+  ```
+</Accordion>
+
+<Accordion title="Virtual environment activation fails">
+  **Problem:** Script execution disabled on Windows.
+  
+  **Solution:** Run PowerShell as Administrator and execute:
+  ```powershell
+  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+  ```
+</Accordion>
+
+<Accordion title="PyMySQL installation fails">
+  **Problem:** Error installing `PyMySQL` or `cryptography`.
+  
+  **Solution:** Install build tools:
+  - **Windows:** Install [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+  - **macOS:** Install Xcode Command Line Tools: `xcode-select --install`
+  - **Linux:** Install `python3-dev` and `build-essential`
+</Accordion>
+
+<Accordion title="Permission denied errors">
+  **Problem:** Permission errors during installation.
+  
+  **Solution:** Ensure you're in the virtual environment (you should see `(venv)` in your prompt). Never use `sudo pip install`.
+</Accordion>
+
+## Deactivating the Virtual Environment
+
+When you're done working on the project, deactivate the virtual environment:
+
+```bash
+deactivate
+```
+
+The `(venv)` prefix will disappear from your prompt.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/quickstart/configuration">
+    Set up your database connection and environment variables
+  </Card>
+  
+  <Card title="First Steps" icon="rocket" href="/quickstart/first-steps">
+    Run the application and create your first catalog entries
+  </Card>
+</CardGroup>
+
+<Tip>
+  Make sure to complete the [Configuration Guide](/quickstart/configuration) before attempting to run the application.
+</Tip>

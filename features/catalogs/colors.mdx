@@ -1,0 +1,354 @@
+---
+title: Colors Catalog
+description: Manage color options for furniture finishes in the Muebles Roble system
+---
+
+## Overview
+
+The Colors catalog manages available color options for furniture products. Each color represents a finish option that can be applied to manufactured items.
+
+## Data Model
+
+The `Color` model is defined in `app/models/color.py:6`:
+
+```python
+class Color(db.Model):
+    __tablename__ = 'colors'
+    
+    id_color = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False, unique=True)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+    
+    created_at = db.Column(db.TIMESTAMP, server_default=func.current_timestamp())
+    updated_at = db.Column(db.TIMESTAMP, server_onupdate=func.current_timestamp())
+    deleted_at = db.Column(db.TIMESTAMP, nullable=True)
+    
+    created_by = db.Column(db.String(100), nullable=True)
+    updated_by = db.Column(db.String(100), nullable=True)
+    deleted_by = db.Column(db.String(100), nullable=True)
+```
+
+### Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id_color` | Integer | Primary key |
+| `name` | String(50) | Unique color name |
+| `active` | Boolean | Soft delete flag |
+| `created_at` | Timestamp | Record creation date |
+| `updated_at` | Timestamp | Last modification date |
+| `deleted_at` | Timestamp | Logical deletion date |
+
+## Service Layer
+
+The `ColorService` class in `app/catalogs/colors/services.py:13` provides business logic methods:
+
+### Get All Colors
+
+Retrieves all active colors:
+
+```python
+colors = ColorService.get_all()
+```
+
+Implementation from `services.py:17`:
+```python
+@staticmethod
+def get_all() -> list[Color]:
+    return Color.query.filter_by(active=True).all()
+```
+
+### Create Color
+
+Creates a new color with validation:
+
+```python
+data = {"name": "Natural Oak"}
+color = ColorService.create(data)
+```
+
+Implementation from `services.py:27`:
+```python
+@staticmethod
+def create(data: dict) -> dict:
+    name = data.get("name")
+    
+    if not name or not name.strip():
+        raise ValidationError("El nombre del color es requerido")
+    
+    name = name.strip()
+    
+    existing = Color.query.filter(func.lower(Color.name) == name.lower()).first()
+    if existing:
+        raise ConflictError(f"Ya existe un color con el nombre '{name}'")
+    
+    color = Color(name=name)
+    db.session.add(color)
+    db.session.commit()
+    
+    return color.to_dict()
+```
+
+<Note>
+The service performs case-insensitive duplicate checking using `func.lower()` to prevent entries like "Red" and "red".
+</Note>
+
+### Get Color by ID
+
+Retrieves a specific color:
+
+```python
+color = ColorService.get_by_id(id_color)
+```
+
+Implementation from `services.py:64`:
+```python
+@staticmethod
+def get_by_id(id_color: int) -> Color:
+    color = Color.query.get(id_color)
+    if not color:
+        raise NotFoundError(f"No se encontró un color con ID {id_color}")
+    return color
+```
+
+### Update Color
+
+Updates an existing color:
+
+```python
+data = {"name": "Updated Color Name"}
+ColorService.update(id_color, data)
+```
+
+Implementation from `services.py:84`:
+```python
+@staticmethod
+def update(id_color: int, data: dict) -> dict:
+    color = ColorService.get_by_id(id_color)
+    
+    name = data.get("name")
+    if not name or not name.strip():
+        raise ValidationError("El nombre del color es requerido")
+    
+    name = name.strip()
+    
+    existing = (
+        db.session.query(Color.id_color)
+        .filter(func.lower(Color.name) == name.lower(), Color.id_color != id_color)
+        .first()
+        is not None
+    )
+    
+    if existing:
+        raise ConflictError(f"Ya existe otro color con el nombre '{name}'")
+    
+    color.name = name
+    db.session.commit()
+    
+    return color.to_dict()
+```
+
+### Delete Color
+
+Performs a soft delete:
+
+```python
+ColorService.delete(id_color)
+```
+
+Implementation from `services.py:129`:
+```python
+@staticmethod
+def delete(id_color: int) -> None:
+    color = ColorService.get_by_id(id_color)
+    color.active = False
+    color.deleted_at = func.current_timestamp()
+    db.session.commit()
+```
+
+<Warning>
+Deletion is logical only. Records are marked as inactive but remain in the database for audit purposes.
+</Warning>
+
+## Routes
+
+The routes module (`app/catalogs/colors/routes.py`) defines HTTP endpoints:
+
+### List Colors
+
+**Endpoint:** `GET /colors/`
+
+```python
+@colors_bp.route("/", methods=["GET"])
+def list_colors():
+    colors = ColorService.get_all()
+    return render_template("colors/list.html", colors=colors)
+```
+
+### Create Color
+
+**Endpoint:** `GET/POST /colors/create`
+
+From `routes.py:26`:
+```python
+@colors_bp.route("/create", methods=["GET", "POST"])
+def create_color():
+    form = ColorForm()
+    
+    if form.validate_on_submit():
+        data = {"name": form.name.data}
+        try:
+            ColorService.create(data)
+            flash("Color creado exitosamente", "success")
+            return redirect(url_for("colors.create_color"))
+        except ConflictError as e:
+            flash(e.message, "error")
+    
+    return render_template("colors/create.html", form=form)
+```
+
+### Edit Color
+
+**Endpoint:** `GET/POST /colors/<id_color>/edit`
+
+From `routes.py:51`:
+```python
+@colors_bp.route("/<int:id_color>/edit", methods=["GET", "POST"])
+def edit_color(id_color: int):
+    try:
+        color = ColorService.get_by_id(id_color)
+    except NotFoundError as e:
+        flash(e.message, "error")
+        return redirect(url_for("colors.list_colors"))
+    
+    form = ColorForm()
+    
+    if form.validate_on_submit():
+        data = {"name": form.name.data}
+        try:
+            ColorService.update(id_color, data)
+            flash("Color actualizado exitosamente", "success")
+            return redirect(url_for("colors.list_colors"))
+        except (ConflictError, ValidationError) as e:
+            flash(e.message, "error")
+    
+    elif request.method == "GET":
+        form.name.data = color.name
+    
+    return render_template("colors/edit.html", form=form, color=color)
+```
+
+### Delete Color
+
+**Endpoint:** `POST /colors/<id_color>/delete`
+
+From `routes.py:87`:
+```python
+@colors_bp.route("/<int:id_color>/delete", methods=["POST"])
+def delete_color(id_color: int):
+    try:
+        ColorService.delete(id_color)
+        flash("Color eliminado exitosamente", "success")
+    except NotFoundError as e:
+        flash(e.message, "error")
+    
+    return redirect(url_for("colors.list_colors"))
+```
+
+## Form Definition
+
+The `ColorForm` class in `app/catalogs/colors/forms.py:10` defines the input form:
+
+```python
+class ColorForm(FlaskForm):
+    name = StringField(
+        "Nombre",
+        validators=[
+            DataRequired(message="El nombre del color es requerido"),
+            Length(max=50, message="El nombre no puede exceder 50 caracteres"),
+        ],
+    )
+```
+
+### Validators
+
+<Steps>
+  <Step title="DataRequired">
+    Ensures the name field is not empty
+  </Step>
+  <Step title="Length">
+    Validates that the name does not exceed 50 characters
+  </Step>
+</Steps>
+
+## Usage Examples
+
+### Creating a Color
+
+```python
+from app.catalogs.colors.services import ColorService
+
+# Create a new color
+color_data = {"name": "Walnut Brown"}
+try:
+    result = ColorService.create(color_data)
+    print(f"Created color: {result}")
+except ConflictError as e:
+    print(f"Duplicate color: {e.message}")
+except ValidationError as e:
+    print(f"Invalid data: {e.message}")
+```
+
+### Updating a Color
+
+```python
+# Update an existing color
+update_data = {"name": "Dark Walnut"}
+try:
+    result = ColorService.update(id_color=5, data=update_data)
+    print(f"Updated color: {result}")
+except NotFoundError as e:
+    print(f"Color not found: {e.message}")
+```
+
+### Listing All Colors
+
+```python
+# Get all active colors
+colors = ColorService.get_all()
+for color in colors:
+    print(f"{color.id_color}: {color.name}")
+```
+
+## Best Practices
+
+<Accordion title="Naming Conventions">
+  Use descriptive, consistent color names:
+  - Good: "Natural Oak", "Espresso Brown", "Arctic White"
+  - Avoid: "clr1", "brown2", "temp"
+</Accordion>
+
+<Accordion title="Error Handling">
+  Always handle exceptions when calling service methods:
+  ```python
+  try:
+      ColorService.create(data)
+  except (ValidationError, ConflictError) as e:
+      flash(e.message, "error")
+  ```
+</Accordion>
+
+<Accordion title="Data Validation">
+  Validate and sanitize input before passing to services:
+  ```python
+  name = form.name.data.strip()  # Remove whitespace
+  if name:
+      ColorService.create({"name": name})
+  ```
+</Accordion>
+
+## Related Documentation
+
+- [Catalogs Overview](/features/catalogs/overview)
+- [Wood Types](/features/catalogs/wood-types)
+- [Furniture Types](/features/catalogs/furniture-types)

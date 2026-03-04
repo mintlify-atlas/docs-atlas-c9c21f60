@@ -1,0 +1,474 @@
+---
+title: Production Traceability
+description: Track materials from receipt through production to finished products
+---
+
+## Overview
+
+Production Traceability provides complete visibility into the journey of materials and products through the manufacturing system, enabling quality control, compliance, and supply chain transparency.
+
+<Info>
+This feature is planned for future implementation as part of the complete production management system.
+</Info>
+
+## Purpose
+
+Traceability enables:
+
+- Tracking materials from supplier to finished product
+- Quality issue investigation and root cause analysis
+- Batch and lot tracking for recalls
+- Compliance with industry regulations
+- Cost analysis and waste reduction
+- Supply chain transparency
+
+## Traceability Chain
+
+```
+┌─────────────────────────────────────────┐
+│  Supplier Shipment                      │
+│  - Supplier name                        │
+│  - Invoice number                       │
+│  - Receipt date                         │
+└─────────────────────────────────────────┘
+                    │
+                    ↓
+┌─────────────────────────────────────────┐
+│  Raw Material Stock                     │
+│  - Material ID & name                   │
+│  - Quantity & cost                      │
+│  - Storage location                     │
+└─────────────────────────────────────────┘
+                    │
+                    ↓
+┌─────────────────────────────────────────┐
+│  Material Issue                         │
+│  - Production order                     │
+│  - Quantity issued                      │
+│  - Issue date & person                  │
+└─────────────────────────────────────────┘
+                    │
+                    ↓
+┌─────────────────────────────────────────┐
+│  Production Order                       │
+│  - Order number                         │
+│  - Product being made                   │
+│  - Production stages                    │
+│  - Workers assigned                     │
+└─────────────────────────────────────────┘
+                    │
+                    ↓
+┌─────────────────────────────────────────┐
+│  Production Completion                  │
+│  - Completion date                      │
+│  - Quantity completed                   │
+│  - Quality inspection                   │
+└─────────────────────────────────────────┘
+                    │
+                    ↓
+┌─────────────────────────────────────────┐
+│  Finished Product                       │
+│  - Product serial/lot number            │
+│  - Inventory location                   │
+│  - Ready for sale                       │
+└─────────────────────────────────────────┘
+                    │
+                    ↓
+┌─────────────────────────────────────────┐
+│  Customer Shipment                      │
+│  - Customer name                        │
+│  - Order number                         │
+│  - Delivery date                        │
+└─────────────────────────────────────────┘
+```
+
+## Data Model Enhancements
+
+Traceability requires additional fields in existing models:
+
+### Batch and Lot Tracking
+
+```python
+class RawMaterial(db.Model):
+    # Existing fields...
+    
+    # Add batch tracking
+    batch_number = db.Column(db.String(50), nullable=True)
+    lot_number = db.Column(db.String(50), nullable=True)
+
+class MaterialReceipt(db.Model):
+    # Existing fields...
+    
+    # Enhanced supplier tracking
+    batch_number = db.Column(db.String(50), nullable=True)
+    certificate_number = db.Column(db.String(50), nullable=True)
+    
+class FinishedProduct(db.Model):
+    # Existing fields...
+    
+    # Add serial/lot tracking
+    serial_number = db.Column(db.String(50), unique=True, nullable=True)
+    lot_number = db.Column(db.String(50), nullable=True)
+    production_batch = db.Column(db.String(50), nullable=True)
+```
+
+## Traceability Service
+
+### TraceabilityService Methods
+
+```python
+class TraceabilityService:
+    @staticmethod
+    def trace_product_to_materials(product_serial: str) -> dict:
+        """
+        Trace finished product back to source materials.
+        
+        Returns complete chain:
+        - Product details
+        - Production order used
+        - Materials consumed
+        - Material receipts
+        - Suppliers
+        """
+        # Find finished product by serial number
+        product = FinishedProduct.query.filter_by(serial_number=product_serial).first()
+        
+        # Get production completion record
+        completion = product.completions.first()
+        
+        # Get production order
+        order = completion.production_order
+        
+        # Get material issues for order
+        materials_used = []
+        for issue in order.material_issues:
+            receipt = issue.material.receipts.order_by(
+                MaterialReceipt.receipt_date.desc()
+            ).first()
+            
+            materials_used.append({
+                "material": issue.material.name,
+                "quantity_used": issue.quantity_issued,
+                "batch": receipt.batch_number if receipt else None,
+                "supplier": receipt.supplier_name if receipt else None,
+                "receipt_date": receipt.receipt_date if receipt else None
+            })
+        
+        return {
+            "product": product.to_dict(),
+            "production_order": order.order_number,
+            "completion_date": completion.completion_date,
+            "materials": materials_used
+        }
+    
+    @staticmethod
+    def trace_material_to_products(material_batch: str) -> dict:
+        """
+        Trace material batch forward to finished products.
+        
+        Returns:
+        - Material receipt details
+        - Production orders that used it
+        - Finished products created
+        - Customer shipments
+        """
+        # Find material receipt by batch
+        receipt = MaterialReceipt.query.filter_by(batch_number=material_batch).first()
+        
+        # Find material issues using this material
+        # (Simplified - would need batch tracking in issues)
+        material_issues = receipt.material.issues.all()
+        
+        products_created = []
+        for issue in material_issues:
+            order = issue.production_order
+            for completion in order.product.completions:
+                if completion.production_order_id == order.id_order:
+                    products_created.append({
+                        "product": order.product.name,
+                        "serial": order.product.serial_number,
+                        "completion_date": completion.completion_date,
+                        "quantity": completion.quantity_completed
+                    })
+        
+        return {
+            "material": receipt.material.name,
+            "batch": receipt.batch_number,
+            "supplier": receipt.supplier_name,
+            "receipt_date": receipt.receipt_date,
+            "quantity_received": receipt.quantity_received,
+            "products_created": products_created
+        }
+    
+    @staticmethod
+    def get_quality_trail(product_serial: str) -> dict:
+        """
+        Get complete quality control history for product.
+        
+        Returns all quality checkpoints:
+        - Material receipt inspections
+        - Production stage quality checks
+        - Final product inspection
+        """
+        product = FinishedProduct.query.filter_by(serial_number=product_serial).first()
+        completion = product.completions.first()
+        order = completion.production_order
+        
+        quality_checks = []
+        
+        # Production stage checks
+        for stage in order.stages:
+            if 'QC' in stage.stage_name or 'quality' in stage.notes.lower():
+                quality_checks.append({
+                    "type": "Stage Inspection",
+                    "stage": stage.stage_name,
+                    "date": stage.end_time,
+                    "inspector": stage.worker_name,
+                    "notes": stage.notes
+                })
+        
+        # Final inspection
+        quality_checks.append({
+            "type": "Final Inspection",
+            "date": completion.completion_date,
+            "inspector": completion.quality_inspector,
+            "status": product.quality_status,
+            "defects": completion.quantity_defective,
+            "notes": completion.quality_notes
+        })
+        
+        return {
+            "product": product.name,
+            "serial": product_serial,
+            "quality_checks": quality_checks
+        }
+```
+
+## Use Cases
+
+### Quality Issue Investigation
+
+<Steps>
+  <Step title="Customer Reports Defect">
+    Customer contacts support about defective table
+  </Step>
+  <Step title="Trace Product">
+    Look up product by serial number to get production details
+  </Step>
+  <Step title="Identify Materials">
+    Trace back to specific materials and batches used
+  </Step>
+  <Step title="Find Related Products">
+    Identify other products made from same material batch
+  </Step>
+  <Step title="Take Action">
+    Contact affected customers, quarantine materials, investigate supplier
+  </Step>
+</Steps>
+
+#### Example: Investigating a Defect
+
+```python
+# Customer reports issue with serial TBL-2024-0315-0042
+trace = TraceabilityService.trace_product_to_materials("TBL-2024-0315-0042")
+
+print(f"Product: {trace['product']['name']}")
+print(f"Production Order: {trace['production_order']}")
+print(f"Completion Date: {trace['completion_date']}")
+print("\nMaterials Used:")
+
+for material in trace['materials']:
+    print(f"  - {material['material']}")
+    print(f"    Supplier: {material['supplier']}")
+    print(f"    Batch: {material['batch']}")
+    print(f"    Receipt: {material['receipt_date']}")
+
+# Find other products using same Oak Plywood batch
+problematic_batch = "OAK-2024-Q1-055"
+affected = TraceabilityService.trace_material_to_products(problematic_batch)
+
+print(f"\nOther products from batch {problematic_batch}:")
+for product in affected['products_created']:
+    print(f"  - {product['serial']}: {product['product']}")
+```
+
+### Recall Management
+
+<Accordion title="Material Recall Scenario">
+  Supplier notifies of defective wood batch:
+  
+  ```python
+  # Supplier recalls batch OAK-2024-Q1-055
+  recall_batch = "OAK-2024-Q1-055"
+  
+  # Find all affected products
+  affected_products = TraceabilityService.trace_material_to_products(recall_batch)
+  
+  # Generate recall list
+  recall_list = []
+  for product in affected_products['products_created']:
+      # Get shipment info if already sold
+      shipment = ProductShipment.query.filter_by(
+          product_id=product['id']
+      ).first()
+      
+      recall_list.append({
+          "serial": product['serial'],
+          "product": product['product'],
+          "status": "SHIPPED" if shipment else "IN_STOCK",
+          "customer": shipment.customer_name if shipment else None
+      })
+  
+  # Contact affected customers
+  # Quarantine in-stock units
+  ```
+</Accordion>
+
+### Cost Analysis
+
+<Accordion title="True Product Cost Calculation">
+  Calculate actual cost including all materials:
+  
+  ```python
+  def calculate_true_product_cost(product_serial: str) -> float:
+      trace = TraceabilityService.trace_product_to_materials(product_serial)
+      
+      total_material_cost = 0.0
+      for material in trace['materials']:
+          # Get material receipt to find actual cost paid
+          receipt = MaterialReceipt.query.filter_by(
+              material_id=material['material_id'],
+              batch_number=material['batch']
+          ).first()
+          
+          if receipt:
+              # Cost = unit_cost × quantity_used
+              cost = receipt.unit_cost * material['quantity_used']
+              total_material_cost += cost
+      
+      # Could also add:
+      # - Labor cost (time per stage × labor rate)
+      # - Overhead allocation
+      # - Waste cost
+      
+      return total_material_cost
+  ```
+</Accordion>
+
+## Traceability Reports
+
+### Material Usage Report
+
+```python
+# Track where specific material batch was used
+def material_usage_report(material_id: int, start_date, end_date) -> dict:
+    issues = MaterialIssue.query.filter(
+        MaterialIssue.material_id == material_id,
+        MaterialIssue.issue_date.between(start_date, end_date)
+    ).all()
+    
+    report = []
+    for issue in issues:
+        order = issue.production_order
+        report.append({
+            "date": issue.issue_date,
+            "order": order.order_number,
+            "product": order.product.name,
+            "quantity_issued": issue.quantity_issued,
+            "quantity_wasted": issue.quantity_wasted,
+            "efficiency": ((issue.quantity_issued - issue.quantity_wasted) / 
+                          issue.quantity_issued * 100)
+        })
+    
+    return report
+```
+
+### Product Genealogy Report
+
+```python
+# Complete history of a finished product
+def product_genealogy(product_serial: str) -> dict:
+    # Material sources
+    materials = TraceabilityService.trace_product_to_materials(product_serial)
+    
+    # Quality history
+    quality = TraceabilityService.get_quality_trail(product_serial)
+    
+    # Production timeline
+    product = FinishedProduct.query.filter_by(serial_number=product_serial).first()
+    completion = product.completions.first()
+    order = completion.production_order
+    
+    timeline = []
+    for stage in order.stages:
+        timeline.append({
+            "stage": stage.stage_name,
+            "start": stage.start_time,
+            "end": stage.end_time,
+            "duration": stage.end_time - stage.start_time if stage.end_time else None,
+            "worker": stage.worker_name
+        })
+    
+    return {
+        "product_info": product.to_dict(),
+        "materials_used": materials['materials'],
+        "production_timeline": timeline,
+        "quality_checks": quality['quality_checks']
+    }
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Batch Numbering" icon="barcode">
+    Use consistent, meaningful batch numbering:
+    - Include date: `OAK-2024-Q1-055`
+    - Include source: `SUP-ACME-2024-100`
+  </Card>
+  <Card title="Serial Numbers" icon="hashtag">
+    Generate unique serial numbers for high-value items:
+    - Format: `[TYPE]-[YYYY]-[MMDD]-[SEQ]`
+    - Example: `TBL-2024-0315-0042`
+  </Card>
+  <Card title="Quality Documentation" icon="file-lines">
+    Record detailed quality information:
+    - Take photos of defects
+    - Note specific issues found
+    - Track inspector names
+  </Card>
+  <Card title="Data Retention" icon="database">
+    Maintain traceability records:
+    - Keep all records for minimum 2-5 years
+    - Never delete traceability data
+    - Archive old records, don't purge
+  </Card>
+</CardGroup>
+
+<Warning>
+**Critical**: Never delete records involved in traceability chains (receipts, issues, completions, shipments). Use soft delete only and archive after appropriate retention period.
+</Warning>
+
+## Compliance and Auditing
+
+<Accordion title="Regulatory Compliance">
+  Traceability supports compliance with:
+  - Quality management standards (ISO 9001)
+  - Product safety regulations
+  - Environmental certifications (FSC for wood)
+  - Customer audit requirements
+</Accordion>
+
+<Accordion title="Audit Trail">
+  All traceability records include:
+  - Who (created_by, updated_by)
+  - When (timestamps)
+  - What (action performed)
+  - Why (notes field)
+</Accordion>
+
+## Related Documentation
+
+- [Production Workflow](/features/production/workflow) - Manufacturing process
+- [Raw Materials Inventory](/features/inventory/raw-materials) - Material tracking
+- [Finished Products Inventory](/features/inventory/finished-products) - Product tracking
+- [Catalogs Overview](/features/catalogs/overview) - Reference data

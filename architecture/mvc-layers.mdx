@@ -1,0 +1,424 @@
+---
+title: MVC Layers
+description: Detailed explanation of the three-tier MVC architecture layers
+---
+
+## Architecture Layers
+
+The Muebles Roble system is organized into three distinct layers, each with specific responsibilities:
+
+1. **Presentation Layer** (routes.py + forms.py + templates/)
+2. **Service Layer** (services.py)
+3. **Model Layer** (models/)
+
+## 1. Presentation Layer
+
+### Responsibility
+
+Handle HTTP requests, validate form data with WTForms, and render HTML views with Jinja2.
+
+### Components
+
+<CardGroup cols={3}>
+  <Card title="Routes" icon="route">
+    Define endpoints and orchestrate request flow
+  </Card>
+  <Card title="Forms" icon="rectangle-list">
+    Validate user input with WTForms
+  </Card>
+  <Card title="Templates" icon="file-code">
+    Render dynamic HTML with Jinja2
+  </Card>
+</CardGroup>
+
+### Example: Color Creation Route
+
+```python app/catalogs/colors/routes.py
+from flask import flash, redirect, render_template, url_for
+from app.exceptions import ConflictError
+from .forms import ColorForm
+from .services import ColorService
+
+@colors_bp.route('/create', methods=['GET', 'POST'])
+def create_color():
+    """
+    Muestra el formulario y crea un nuevo color en el catálogo.
+    
+    GET: Renderiza el formulario de creación.
+    POST: Valida el formulario, crea el color y redirige.
+    """
+    form = ColorForm()
+    
+    if form.validate_on_submit():
+        data = {'name': form.name.data}
+        try:
+            ColorService.create(data)
+            flash('Color creado exitosamente', 'success')
+            return redirect(url_for('colors.create_color'))
+        except ConflictError as e:
+            flash(e.message, 'error')
+    
+    return render_template('colors/create.html', form=form)
+```
+
+### Key Features
+
+<AccordionGroup>
+  <Accordion title="Blueprint Registration">
+    Routes are organized into blueprints for modular structure. Each module (colors, roles, wood types) has its own blueprint.
+    
+    ```python app/catalogs/colors/__init__.py
+    from flask import Blueprint
+    
+    colors_bp = Blueprint('colors', __name__)
+    
+    from . import routes
+    ```
+  </Accordion>
+  
+  <Accordion title="Form Validation with WTForms">
+    Forms provide automatic CSRF protection and data validation:
+    
+    ```python app/catalogs/colors/forms.py
+    from flask_wtf import FlaskForm
+    from wtforms import StringField, SubmitField
+    from wtforms.validators import DataRequired, Length
+    
+    class ColorForm(FlaskForm):
+        name = StringField('Nombre', 
+                          validators=[DataRequired(), Length(max=50)])
+        submit = SubmitField('Guardar')
+    ```
+  </Accordion>
+  
+  <Accordion title="Flash Messages">
+    User feedback is provided through Flask's flash() function:
+    
+    ```python
+    flash('Color creado exitosamente', 'success')
+    flash('Error al crear el color', 'error')
+    ```
+  </Accordion>
+  
+  <Accordion title="Template Rendering">
+    Jinja2 templates extend a base layout and display dynamic content:
+    
+    ```html templates/colors/create.html
+    {% extends 'base.html' %}
+    
+    {% block content %}
+    <form method="POST">
+        {{ form.hidden_tag() }}
+        {{ form.name.label }}
+        {{ form.name }}
+        {{ form.submit }}
+    </form>
+    {% endblock %}
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+The presentation layer should **never** contain business logic. All validation and processing must be delegated to the service layer.
+</Warning>
+
+## 2. Service Layer
+
+### Responsibility
+
+Contain business logic, orchestrate operations, and manage database transactions.
+
+### Example: Color Service
+
+```python app/catalogs/colors/services.py
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
+from app.exceptions import ConflictError, ValidationError, NotFoundError
+from app.extensions import db
+from app.models.color import Color
+
+class ColorService:
+    """Servicio para operaciones de negocio relacionadas con colores."""
+    
+    @staticmethod
+    def create(data: dict) -> dict:
+        """
+        Crea un nuevo color en el catálogo.
+        
+        Args:
+            data: Diccionario con los datos del color (name requerido)
+            
+        Returns:
+            dict: Color creado serializado
+            
+        Raises:
+            ValidationError: Si el nombre está vacío o no se proporciona
+            ConflictError: Si ya existe un color con el mismo nombre
+        """
+        name = data.get('name')
+        
+        if not name or not name.strip():
+            raise ValidationError('El nombre del color es requerido')
+        
+        name = name.strip()
+        
+        existing = Color.query.filter(
+            func.lower(Color.name) == name.lower()
+        ).first()
+        if existing:
+            raise ConflictError(f"Ya existe un color con el nombre '{name}'")
+        
+        color = Color(name=name)
+        db.session.add(color)
+        
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            raise ConflictError(f"Ya existe un color con el nombre '{name}'")
+        
+        return color.to_dict()
+    
+    @staticmethod
+    def get_by_id(id_color: int) -> Color:
+        """Obtiene un color por su ID."""
+        color = Color.query.get(id_color)
+        
+        if not color:
+            raise NotFoundError(f"No se encontró un color con ID {id_color}")
+        return color
+    
+    @staticmethod
+    def update(id_color: int, data: dict) -> dict:
+        """Actualiza un color existente."""
+        color = ColorService.get_by_id(id_color)
+        
+        name = data.get('name')
+        if not name or not name.strip():
+            raise ValidationError('El nombre del color es requerido')
+        
+        name = name.strip()
+        
+        existing = (
+            db.session.query(Color.id_color)
+            .filter(
+                func.lower(Color.name) == name.lower(),
+                Color.id_color != id_color
+            )
+            .first() is not None
+        )
+        
+        if existing:
+            raise ConflictError(f"Ya existe otro color con el nombre '{name}'")
+        
+        color.name = name
+        
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            raise ConflictError(f"Ya existe otro color con el nombre '{name}'")
+        
+        return color.to_dict()
+    
+    @staticmethod
+    def delete(id_color: int) -> None:
+        """Elimina un color (soft delete)."""
+        color = ColorService.get_by_id(id_color)
+        
+        color.active = False
+        color.deleted_at = func.current_timestamp()
+        
+        db.session.commit()
+```
+
+### Key Responsibilities
+
+<Steps>
+  <Step title="Business Validation">
+    Enforce business rules like uniqueness constraints and data requirements.
+  </Step>
+  <Step title="Transaction Management">
+    Handle database commits and rollbacks to ensure data consistency.
+  </Step>
+  <Step title="Exception Handling">
+    Throw domain-specific exceptions (ValidationError, ConflictError, NotFoundError) that routes can catch and handle.
+  </Step>
+  <Step title="Data Transformation">
+    Convert between dictionaries and model objects using serialization methods.
+  </Step>
+</Steps>
+
+<Note>
+Services are **framework-agnostic**. They don't depend on Flask-specific features, making them easier to test and reuse.
+</Note>
+
+## 3. Model Layer
+
+### Responsibility
+
+Define entities, map them to database tables, and provide data access methods.
+
+### Example: Color Model
+
+```python app/models/color.py
+from sqlalchemy.sql import func
+from ..extensions import db
+
+class Color(db.Model):
+    """
+    Modelo de Color para catálogo de referencias de colores.
+    
+    Attributes:
+        id_color: Identificador único del color.
+        name: Nombre del color.
+        active: Indica si el color está activo o no.
+        
+        created_at: Fecha de creación del color.
+        updated_at: Fecha de última actualización del color.
+        deleted_at: Fecha de eliminación lógica del color.
+        
+        created_by: Usuario que creó el color.
+        updated_by: Usuario que actualizó el color.
+        deleted_by: Usuario que eliminó el color.
+    """
+    
+    __tablename__ = 'colors'
+    
+    id_color = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False, unique=True)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+    
+    created_at = db.Column(
+        db.TIMESTAMP,
+        nullable=False,
+        server_default=func.current_timestamp()
+    )
+    updated_at = db.Column(
+        db.TIMESTAMP,
+        nullable=False,
+        server_default=func.current_timestamp(),
+        server_onupdate=func.current_timestamp()
+    )
+    deleted_at = db.Column(db.TIMESTAMP, nullable=True)
+    
+    created_by = db.Column(db.String(100), nullable=True)
+    updated_by = db.Column(db.String(100), nullable=True)
+    deleted_by = db.Column(db.String(100), nullable=True)
+    
+    def to_dict(self) -> dict:
+        """
+        Serializa el modelo a diccionario.
+        
+        Returns:
+            dict: Representación del color en formato diccionario
+        """
+        return {
+            'id_color': self.id_color,
+            'name': self.name,
+            'active': self.active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+```
+
+### Key Features
+
+<CardGroup cols={2}>
+  <Card title="Audit Fields" icon="clock">
+    All models include `created_at`, `updated_at`, and `deleted_at` timestamps for tracking changes.
+  </Card>
+  <Card title="Soft Deletes" icon="trash">
+    Records are marked as inactive rather than physically deleted using the `active` and `deleted_at` fields.
+  </Card>
+  <Card title="User Tracking" icon="user">
+    `created_by`, `updated_by`, and `deleted_by` fields track which user performed each action.
+  </Card>
+  <Card title="Serialization" icon="code">
+    The `to_dict()` method converts model instances to dictionaries for JSON responses or template rendering.
+  </Card>
+</CardGroup>
+
+<Warning>
+Models should **not contain business logic**. They only define structure and provide data access methods.
+</Warning>
+
+## Layer Interaction Example
+
+Here's a complete flow showing how all three layers work together:
+
+```python
+# 1. PRESENTATION LAYER - Route handles the request
+@colors_bp.route('/create', methods=['POST'])
+def create_color():
+    form = ColorForm()
+    if form.validate_on_submit():
+        data = {'name': form.name.data}
+        try:
+            # 2. Delegate to SERVICE LAYER
+            ColorService.create(data)
+            flash('Color creado exitosamente', 'success')
+            return redirect(url_for('colors.list_colors'))
+        except ConflictError as e:
+            flash(e.message, 'error')
+
+# 2. SERVICE LAYER - Implements business logic
+class ColorService:
+    @staticmethod
+    def create(data: dict) -> dict:
+        name = data.get('name')
+        
+        # Business validation
+        if not name or not name.strip():
+            raise ValidationError('El nombre del color es requerido')
+        
+        # Check for duplicates
+        existing = Color.query.filter_by(name=name).first()
+        if existing:
+            raise ConflictError(f"Ya existe un color con el nombre '{name}'")
+        
+        # 3. Use MODEL LAYER to persist data
+        color = Color(name=name)
+        db.session.add(color)
+        db.session.commit()
+        
+        return color.to_dict()
+
+# 3. MODEL LAYER - Defines the entity structure
+class Color(db.Model):
+    __tablename__ = 'colors'
+    id_color = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False, unique=True)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Keep Layers Independent">
+    Each layer should be able to be tested independently. Avoid tight coupling between layers.
+  </Accordion>
+  
+  <Accordion title="Use Dependency Injection">
+    Pass dependencies as parameters rather than importing them directly to improve testability.
+  </Accordion>
+  
+  <Accordion title="Handle Exceptions Properly">
+    Services throw domain-specific exceptions; routes catch and handle them appropriately.
+  </Accordion>
+  
+  <Accordion title="Follow PRG Pattern">
+    Always redirect after POST requests to prevent duplicate submissions.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Module Organization" icon="folder-tree" href="/architecture/modules">
+    Learn how modules are structured within each layer
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/architecture/error-handling">
+    Understand the exception hierarchy and error handling
+  </Card>
+</CardGroup>

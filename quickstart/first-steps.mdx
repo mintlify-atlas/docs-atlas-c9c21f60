@@ -1,0 +1,686 @@
+---
+title: First Steps
+description: Learn how to run Muebles Roble for the first time and create your initial catalog entries for colors, wood types, and furniture types
+---
+
+# First Steps
+
+Now that you've installed and configured Muebles Roble, let's run the application and create your first catalog entries. This guide will walk you through starting the server and using the basic features.
+
+<Info>
+  Make sure you've completed the [Installation](/quickstart/installation) and [Configuration](/quickstart/configuration) guides before proceeding.
+</Info>
+
+## Starting the Application
+
+<Steps>
+  <Step title="Activate Virtual Environment">
+    First, ensure your virtual environment is activated:
+    
+    <CodeGroup>
+    ```bash Windows
+    venv\Scripts\activate
+    ```
+    
+    ```bash macOS/Linux
+    source venv/bin/activate
+    ```
+    </CodeGroup>
+    
+    You should see `(venv)` in your terminal prompt.
+  </Step>
+  
+  <Step title="Run the Application">
+    Start the Flask development server using one of these methods:
+    
+    <CodeGroup>
+    ```bash Flask CLI
+    flask run
+    ```
+    
+    ```bash Python Direct
+    python run.py
+    ```
+    </CodeGroup>
+    
+    You should see output like:
+    
+    ```
+    Database connection successful!
+     * Serving Flask app 'app'
+     * Debug mode: on
+     * Running on http://127.0.0.1:5000
+     * Press CTRL+C to quit
+     * Restarting with stat
+     * Debugger is active!
+    ```
+    
+    <Note>
+      The "Database connection successful!" message confirms your database is configured correctly.
+    </Note>
+  </Step>
+  
+  <Step title="Open in Browser">
+    Open your web browser and navigate to:
+    
+    ```
+    http://127.0.0.1:5000
+    ```
+    
+    or
+    
+    ```
+    http://localhost:5000
+    ```
+    
+    <Tip>
+      Keep the terminal window open while using the application. Press `Ctrl+C` to stop the server.
+    </Tip>
+  </Step>
+</Steps>
+
+## Understanding the Application URLs
+
+The application is organized into modules with specific URL prefixes:
+
+| Module | Base URL | Purpose |
+|--------|----------|--------|
+| Colors | `http://localhost:5000/colors/` | Manage color catalog |
+| Wood Types | `http://localhost:5000/wood-types/` | Manage wood types |
+| Furniture Types | `http://localhost:5000/furniture-type/` | Manage furniture categories |
+| Unit of Measures | `http://localhost:5000/unit-of-measures/` | Manage measurement units |
+| Roles | `http://localhost:5000/roles/` | Manage user roles |
+
+Each module provides these routes:
+
+- `/` - List all entries
+- `/create` - Create a new entry
+- `/<id>/edit` - Edit an existing entry
+- `/<id>/delete` - Delete an entry (soft delete)
+
+## Creating Your First Color
+
+Let's start by creating color entries for your furniture finishes.
+
+<Steps>
+  <Step title="Navigate to Colors">
+    Go to the colors creation page:
+    
+    ```
+    http://localhost:5000/colors/create
+    ```
+    
+    You'll see a form with a "Color Name" field.
+  </Step>
+  
+  <Step title="Create Natural Color">
+    Enter "Natural" in the color name field and click "Create Color" (or submit button).
+    
+    If successful, you'll see a success message:
+    ```
+    Color created successfully
+    ```
+    
+    The form will be cleared, ready for the next entry.
+  </Step>
+  
+  <Step title="Create More Colors">
+    Add these common furniture colors:
+    
+    - White
+    - Black
+    - Walnut
+    - Mahogany
+    - Cherry
+    - Oak
+    - Espresso
+    
+    For each color, enter the name and submit the form.
+  </Step>
+  
+  <Step title="View Color List">
+    Navigate to the colors list page:
+    
+    ```
+    http://localhost:5000/colors/
+    ```
+    
+    You'll see all the colors you've created with their:
+    - ID
+    - Name
+    - Active status
+    - Created timestamp
+    - Action buttons (Edit/Delete)
+  </Step>
+</Steps>
+
+### Behind the Scenes: Color Creation
+
+When you create a color, here's what happens:
+
+<Accordion title="1. Form Submission">
+  The HTML form sends a POST request to `/colors/create`:
+  ```html
+  <form method="POST" action="/colors/create">
+      {{ form.hidden_tag() }}  <!-- CSRF token -->
+      {{ form.name }}
+      <button type="submit">Create</button>
+  </form>
+  ```
+</Accordion>
+
+<Accordion title="2. Route Handling">
+  The route validates the form and calls the service:
+  ```python
+  # app/catalogs/colors/routes.py
+  @colors_bp.route("/create", methods=["GET", "POST"])
+  def create_color():
+      form = ColorForm()
+      
+      if form.validate_on_submit():
+          data = {"name": form.name.data}
+          try:
+              ColorService.create(data)
+              flash("Color created successfully", "success")
+              return redirect(url_for("colors.create_color"))
+          except ConflictError as e:
+              flash(e.message, "error")
+      
+      return render_template("colors/create.html", form=form)
+  ```
+</Accordion>
+
+<Accordion title="3. Service Logic">
+  The service validates business rules and saves to database:
+  ```python
+  # app/catalogs/colors/services.py
+  @staticmethod
+  def create(data: dict) -> dict:
+      name = data.get('name')
+      if not name or not name.strip():
+          raise ValidationError('Color name is required')
+      
+      # Check for duplicates
+      existing = Color.query.filter_by(name=name.strip()).first()
+      if existing:
+          raise ConflictError(f"Color '{name}' already exists")
+      
+      color = Color(name=name.strip())
+      db.session.add(color)
+      db.session.commit()
+      return color.to_dict()
+  ```
+</Accordion>
+
+<Accordion title="4. Database Record">
+  A new record is created with automatic audit fields:
+  ```sql
+  INSERT INTO colors (name, active, created_at, updated_at) 
+  VALUES ('Natural', 1, NOW(), NOW());
+  ```
+</Accordion>
+
+## Creating Wood Types
+
+Next, let's add the types of wood your furniture shop uses.
+
+<Steps>
+  <Step title="Navigate to Wood Types">
+    Go to:
+    ```
+    http://localhost:5000/wood-types/create
+    ```
+  </Step>
+  
+  <Step title="Add Common Wood Types">
+    Create these standard wood types:
+    
+    - Pine (Pino)
+    - Cedar (Cedro)
+    - Oak (Encino)
+    - Mahogany (Caoba)
+    - Maple (Arce)
+    - Cherry (Cerezo)
+    - Walnut (Nogal)
+    - Ash (Fresno)
+    
+    <Tip>
+      You can use the Spanish names if your business operates in a Spanish-speaking region.
+    </Tip>
+  </Step>
+  
+  <Step title="View Wood Types">
+    Navigate to:
+    ```
+    http://localhost:5000/wood-types/
+    ```
+    
+    You'll see your complete wood type catalog.
+  </Step>
+</Steps>
+
+## Creating Furniture Types
+
+Define the categories of furniture your shop produces.
+
+<Steps>
+  <Step title="Navigate to Furniture Types">
+    Go to:
+    ```
+    http://localhost:5000/furniture-type/create
+    ```
+  </Step>
+  
+  <Step title="Add Furniture Categories">
+    Create these common furniture types:
+    
+    - Tables (Mesas)
+    - Chairs (Sillas)
+    - Closets (Closets)
+    - Desks (Escritorios)
+    - Shelves (Estantes)
+    - Cabinets (Gabinetes)
+    - Bookcases (Libreros)
+    - Nightstands (Burós)
+    - Dressers (Cómodas)
+  </Step>
+  
+  <Step title="View Furniture Types">
+    Navigate to:
+    ```
+    http://localhost:5000/furniture-type/
+    ```
+  </Step>
+</Steps>
+
+## Creating Units of Measure
+
+Add the measurement units used for tracking materials and products.
+
+<Steps>
+  <Step title="Navigate to Units">
+    Go to:
+    ```
+    http://localhost:5000/unit-of-measures/create
+    ```
+  </Step>
+  
+  <Step title="Add Measurement Units">
+    Create these units:
+    
+    - Kilogram (kg) - For wood weight
+    - Square Meter (m²) - For wood surface area
+    - Linear Meter (m) - For wood length
+    - Piece (pza) - For individual items
+    - Liter (L) - For finishes and glues
+    - Gallon (gal) - For paint and varnish
+  </Step>
+</Steps>
+
+## Editing Catalog Entries
+
+You can edit any catalog entry:
+
+<Steps>
+  <Step title="Navigate to List">
+    Go to any catalog list page (e.g., `/colors/`)
+  </Step>
+  
+  <Step title="Click Edit">
+    Click the "Edit" button next to the entry you want to modify
+  </Step>
+  
+  <Step title="Update and Save">
+    The form will be pre-populated with the current value. Make your changes and submit.
+    
+    Example URL: `http://localhost:5000/colors/1/edit`
+  </Step>
+</Steps>
+
+### Edit Flow
+
+Here's what happens during an edit:
+
+```python
+# app/catalogs/colors/routes.py
+@colors_bp.route("/<int:id_color>/edit", methods=["GET", "POST"])
+def edit_color(id_color: int):
+    try:
+        color = ColorService.get_by_id(id_color)
+    except NotFoundError as e:
+        flash(e.message, "error")
+        return redirect(url_for("colors.list_colors"))
+    
+    form = ColorForm()
+    
+    if form.validate_on_submit():
+        data = {"name": form.name.data}
+        try:
+            ColorService.update(id_color, data)
+            flash("Color updated successfully", "success")
+            return redirect(url_for("colors.list_colors"))
+        except (ConflictError, ValidationError) as e:
+            flash(e.message, "error")
+    
+    elif request.method == "GET":
+        # Pre-populate form on GET requests
+        form.name.data = color.name
+    
+    return render_template("colors/edit.html", form=form, color=color)
+```
+
+<Note>
+  The system uses the **PRG (Post-Redirect-Get)** pattern to prevent duplicate submissions if the user refreshes the page.
+</Note>
+
+## Deleting Catalog Entries
+
+The system uses **soft deletion** to preserve data:
+
+<Steps>
+  <Step title="Navigate to List">
+    Go to any catalog list page
+  </Step>
+  
+  <Step title="Click Delete">
+    Click the "Delete" button next to the entry
+  </Step>
+  
+  <Step title="Confirm Deletion">
+    The entry will be marked as inactive (`active = False`) and the deletion timestamp will be recorded.
+    
+    The entry disappears from the active list but remains in the database.
+  </Step>
+</Steps>
+
+### Soft Delete Implementation
+
+```python
+# app/catalogs/colors/routes.py
+@colors_bp.route("/<int:id_color>/delete", methods=["POST"])
+def delete_color(id_color: int):
+    try:
+        ColorService.delete(id_color)
+        flash("Color deleted successfully", "success")
+    except NotFoundError as e:
+        flash(e.message, "error")
+    
+    return redirect(url_for("colors.list_colors"))
+```
+
+<Warning>
+  Deletion is a POST request for security. You cannot delete by simply visiting a URL.
+</Warning>
+
+## Understanding Flash Messages
+
+The application uses Flask's flash messaging system for user feedback:
+
+### Success Messages
+
+```
+✓ Color created successfully
+✓ Wood type updated successfully
+```
+
+### Error Messages
+
+```
+✗ Color 'White' already exists
+✗ Color with ID 999 not found
+✗ Color name is required
+```
+
+Flash messages appear at the top of the page and are cleared after being displayed once.
+
+## Validating Data Entry
+
+Try these scenarios to see validation in action:
+
+### Duplicate Detection
+
+<Steps>
+  <Step title="Create a Color">
+    Create a color named "White"
+  </Step>
+  
+  <Step title="Try to Create Again">
+    Try creating another color named "White"
+  </Step>
+  
+  <Step title="See Error">
+    You'll see: `Color 'White' already exists`
+  </Step>
+</Steps>
+
+### Required Fields
+
+<Steps>
+  <Step title="Leave Field Empty">
+    Go to create form and submit without entering a name
+  </Step>
+  
+  <Step title="See Validation">
+    You'll see: `This field is required` or `Color name is required`
+  </Step>
+</Steps>
+
+### Length Validation
+
+<Steps>
+  <Step title="Enter Single Character">
+    Try entering just "A" as a color name
+  </Step>
+  
+  <Step title="See Error">
+    You'll see: `Name must be 2-50 characters`
+  </Step>
+</Steps>
+
+## Viewing the Database
+
+You can verify your data was saved to MySQL:
+
+```bash
+mysql -u your_username -p
+```
+
+```sql
+USE muebles_roble_db;
+
+-- View all colors
+SELECT * FROM colors;
+
+-- View active colors only
+SELECT * FROM colors WHERE active = 1;
+
+-- View with formatting
+SELECT 
+    id_color,
+    name,
+    active,
+    created_at,
+    updated_at
+FROM colors
+ORDER BY created_at DESC;
+```
+
+You should see all the audit fields populated:
+
+```
++----------+---------+--------+---------------------+---------------------+
+| id_color | name    | active | created_at          | updated_at          |
++----------+---------+--------+---------------------+---------------------+
+|        1 | Natural |      1 | 2024-03-15 10:30:00 | 2024-03-15 10:30:00 |
+|        2 | White   |      1 | 2024-03-15 10:31:00 | 2024-03-15 10:31:00 |
+|        3 | Black   |      1 | 2024-03-15 10:32:00 | 2024-03-15 10:32:00 |
++----------+---------+--------+---------------------+---------------------+
+```
+
+## Testing CSRF Protection
+
+Try submitting a form without the CSRF token:
+
+<Warning>
+  For educational purposes only. Never disable CSRF protection in production.
+</Warning>
+
+1. Open browser developer tools (F12)
+2. Go to `/colors/create`
+3. In the console, try:
+   ```javascript
+   fetch('/colors/create', {
+       method: 'POST',
+       body: 'name=Test',
+       headers: {'Content-Type': 'application/x-www-form-urlencoded'}
+   })
+   ```
+4. The request will be rejected with a CSRF error
+
+This demonstrates that all forms are protected against CSRF attacks.
+
+## Development Tips
+
+### Auto-Reload
+
+Flask's debug mode automatically reloads when you change code:
+
+1. Edit a file (e.g., `routes.py`)
+2. Save the file
+3. The server automatically restarts
+4. Refresh your browser to see changes
+
+<Tip>
+  You don't need to manually restart the server during development.
+</Tip>
+
+### Debug Mode Features
+
+With `FLASK_ENV=development`, you get:
+
+- **Detailed error pages** - Stack traces in the browser
+- **Auto-reload** - Automatic server restart on code changes
+- **Debug toolbar** - (if installed) Request/response inspection
+
+### Viewing Logs
+
+The terminal where you ran `flask run` shows:
+
+```
+Database connection successful!
+127.0.0.1 - - [15/Mar/2024 10:30:00] "GET /colors/create HTTP/1.1" 200 -
+127.0.0.1 - - [15/Mar/2024 10:30:15] "POST /colors/create HTTP/1.1" 302 -
+127.0.0.1 - - [15/Mar/2024 10:30:15] "GET /colors/create HTTP/1.1" 200 -
+```
+
+This shows:
+- Timestamp
+- HTTP method and path
+- Response status code (200 = success, 302 = redirect)
+
+## Common Issues
+
+<Accordion title="Port already in use">
+  **Error:** `Address already in use`
+  
+  **Solution:** Either:
+  - Stop the existing server (find and kill the process)
+  - Use a different port: `flask run --port 5001`
+</Accordion>
+
+<Accordion title="Database connection failed">
+  **Error:** `Database connection failed: Access denied`
+  
+  **Solution:**
+  - Verify your `.env` file has correct credentials
+  - Check MySQL is running: `mysql -u root -p`
+  - Review the [Configuration Guide](/quickstart/configuration)
+</Accordion>
+
+<Accordion title="Page not found (404)">
+  **Error:** 404 Not Found
+  
+  **Solution:**
+  - Verify the URL is correct (check for typos)
+  - Ensure you're using the right prefix (`/colors/`, not `/color/`)
+  - Check that the blueprint is registered in `app/__init__.py`
+</Accordion>
+
+<Accordion title="Form doesn't submit">
+  **Problem:** Clicking submit does nothing
+  
+  **Solution:**
+  - Check browser console for JavaScript errors
+  - Verify the form has `method="POST"`
+  - Ensure `{{ form.hidden_tag() }}` is present (CSRF token)
+</Accordion>
+
+## Next Steps
+
+Now that you understand the basics:
+
+<CardGroup cols={2}>
+  <Card title="Key Features" icon="star" href="/features">
+    Explore advanced features like audit trails and soft deletes
+  </Card>
+  
+  <Card title="Architecture" icon="sitemap">
+    Understand the layered MVC architecture in depth
+  </Card>
+  
+  <Card title="Add Authentication" icon="lock">
+    Learn how to add user login and permissions (coming soon)
+  </Card>
+  
+  <Card title="Deploy to Production" icon="rocket">
+    Deploy the application to a production server (coming soon)
+  </Card>
+</CardGroup>
+
+## Quick Reference
+
+### Common URLs
+
+```
+http://localhost:5000/colors/
+http://localhost:5000/colors/create
+http://localhost:5000/wood-types/
+http://localhost:5000/furniture-type/
+http://localhost:5000/unit-of-measures/
+http://localhost:5000/roles/
+```
+
+### Common Commands
+
+```bash
+# Start server
+flask run
+python run.py
+
+# Database migrations
+flask db migrate -m "Description"
+flask db upgrade
+flask db downgrade
+
+# Check routes
+flask routes
+
+# Stop server
+Ctrl+C
+```
+
+### File Locations
+
+```
+config.py          # Configuration
+.env               # Environment variables
+run.py             # Entry point
+app/__init__.py    # App factory
+app/models/        # Database models
+app/catalogs/      # Business modules
+app/templates/     # HTML templates
+```
+
+<Tip>
+  Bookmark this page for quick reference while developing!
+</Tip>

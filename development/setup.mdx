@@ -1,0 +1,238 @@
+---
+title: "Development Environment Setup"
+description: "Complete guide to set up your development environment for Muebles Roble"
+---
+
+## Prerequisites
+
+Before starting development, ensure you have the following installed:
+
+<CardGroup cols={2}>
+  <Card title="Python 3.10.11" icon="python">
+    Required Python version for this project
+  </Card>
+  <Card title="MySQL Database" icon="database">
+    Relational database for data persistence
+  </Card>
+  <Card title="pip" icon="box">
+    Python package manager
+  </Card>
+  <Card title="Git" icon="code-branch">
+    Version control system
+  </Card>
+</CardGroup>
+
+### Verify Python Installation
+
+Check your Python version:
+
+```bash
+python --version
+```
+
+You should see:
+
+```
+Python 3.10.11
+```
+
+## Initial Setup
+
+### 1. Clone the Repository
+
+```bash
+git clone <REPOSITORY_URL>
+cd muebles-roble-diseno-app
+```
+
+### 2. Create Virtual Environment
+
+Create an isolated Python environment:
+
+```bash
+python -m venv venv
+```
+
+### 3. Activate Virtual Environment
+
+<Tabs>
+  <Tab title="Windows">
+    ```bash
+    venv\Scripts\activate
+    ```
+  </Tab>
+  <Tab title="Mac/Linux">
+    ```bash
+    source venv/bin/activate
+    ```
+  </Tab>
+</Tabs>
+
+When activated successfully, you'll see `(venv)` at the beginning of your terminal prompt.
+
+### 4. Install Dependencies
+
+Install all required Python packages:
+
+```bash
+pip install -r requirements.txt
+```
+
+<Accordion title="Key Dependencies">
+  - **Flask 3.1.2** - Web framework
+  - **Flask-SQLAlchemy 3.1.1** - ORM for database operations
+  - **Flask-Migrate 4.1.0** - Database migrations
+  - **Flask-WTF 1.2.2** - Form handling and CSRF protection
+  - **WTForms 3.2.1** - Form validation
+  - **PyMySQL 1.1.2** - MySQL database driver
+  - **Black 26.1.0** - Code formatter
+  - **python-dotenv 1.2.1** - Environment variable management
+</Accordion>
+
+## Environment Configuration
+
+### Create Environment File
+
+1. Copy the template file:
+
+```bash
+cp .env-template .env
+```
+
+2. Edit `.env` with your configuration:
+
+```bash .env
+FLASK_APP=app.py
+FLASK_ENV=development
+
+DB_USER=your_database_user
+DB_PASSWORD=your_database_password
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=your_database_name
+
+SECRET_KEY=your-secret-key-here
+```
+
+<Warning>
+  Never commit the `.env` file to version control. It's already included in `.gitignore`.
+</Warning>
+
+### Database Setup
+
+Create your MySQL database:
+
+```sql
+CREATE DATABASE your_database_name CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+### Run Database Migrations
+
+Apply the database schema:
+
+```bash
+flask db upgrade
+```
+
+## Running the Application
+
+### Development Server
+
+Start the Flask development server:
+
+<Tabs>
+  <Tab title="Using Flask CLI">
+    ```bash
+    flask run
+    ```
+  </Tab>
+  <Tab title="Using run.py">
+    ```bash
+    python run.py
+    ```
+  </Tab>
+</Tabs>
+
+The application will be available at:
+
+```
+http://127.0.0.1:5000
+```
+
+### Verify Installation
+
+The `run.py` script includes a database connection test. You should see:
+
+```
+Database connection successful!
+ * Running on http://127.0.0.1:5000
+```
+
+<Check>
+  If you see "Database connection successful!" your setup is complete!
+</Check>
+
+## Development Tools
+
+### Code Formatting with Black
+
+The project uses Black for consistent code formatting:
+
+```bash
+# Format all code
+black .
+
+# Check formatting without making changes
+black --check .
+```
+
+### Type Checking with mypy
+
+Run type checking:
+
+```bash
+mypy app/
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Database Connection Failed">
+    - Verify MySQL is running
+    - Check credentials in `.env` file
+    - Ensure database exists
+    - Check firewall settings for port 3306
+  </Accordion>
+
+  <Accordion title="Module Not Found Errors">
+    - Ensure virtual environment is activated
+    - Reinstall dependencies: `pip install -r requirements.txt`
+    - Check Python version matches 3.10.11
+  </Accordion>
+
+  <Accordion title="SECRET_KEY Error in Production">
+    The application requires a `SECRET_KEY` environment variable in production.
+    Generate a secure key:
+    ```python
+    import secrets
+    print(secrets.token_hex(32))
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Project Structure" icon="folder-tree" href="/development/project-structure">
+    Learn about the application architecture
+  </Card>
+  <Card title="Coding Conventions" icon="code" href="/development/coding-conventions">
+    Follow the project's coding standards
+  </Card>
+  <Card title="Templates Guide" icon="file-code" href="/development/templates">
+    Work with Jinja2 templates
+  </Card>
+  <Card title="Forms Guide" icon="input-text" href="/development/forms">
+    Create and validate forms
+  </Card>
+</CardGroup>

@@ -1,0 +1,553 @@
+---
+title: Database Models
+description: Comprehensive guide to data models and their structure
+---
+
+## Overview
+
+The Muebles Roble system uses **SQLAlchemy ORM** to define database models. All models follow a consistent structure with audit fields and soft delete support.
+
+## Current Models
+
+<CardGroup cols={2}>
+  <Card title="Color" icon="palette">
+    Color catalog for furniture references
+  </Card>
+  <Card title="Role" icon="user-shield">
+    User roles for permissions management
+  </Card>
+  <Card title="WoodType" icon="tree">
+    Wood material types catalog
+  </Card>
+  <Card title="UnitOfMeasure" icon="ruler">
+    Measurement units (cm, m, kg, etc.)
+  </Card>
+  <Card title="FurnitureType" icon="couch">
+    Furniture category classifications
+  </Card>
+</CardGroup>
+
+## Model Structure
+
+All models share a common structure with these standard fields:
+
+### Primary Key
+- `id_{table_name}` - Integer primary key
+
+### Business Fields
+- Specific to each entity (e.g., `name`, `description`)
+
+### Audit Fields
+<CardGroup cols={3}>
+  <Card title="Timestamps" icon="clock">
+    - `created_at`
+    - `updated_at`
+    - `deleted_at`
+  </Card>
+  <Card title="User Tracking" icon="user">
+    - `created_by`
+    - `updated_by`
+    - `deleted_by`
+  </Card>
+  <Card title="Status" icon="toggle-on">
+    - `active` (Boolean)
+  </Card>
+</CardGroup>
+
+## Model Definitions
+
+### Color Model
+
+Manages the color catalog for furniture references.
+
+```python app/models/color.py
+from sqlalchemy.sql import func
+from ..extensions import db
+
+class Color(db.Model):
+    """
+    Modelo de Color para catálogo de referencias de colores.
+    
+    Attributes:
+        id_color: Identificador único del color.
+        name: Nombre del color.
+        active: Indica si el color está activo o no.
+        
+        created_at: Fecha de creación del color.
+        updated_at: Fecha de última actualización del color.
+        deleted_at: Fecha de eliminación lógica del color.
+        
+        created_by: Usuario que creó el color.
+        updated_by: Usuario que actualizó el color.
+        deleted_by: Usuario que eliminó el color.
+    """
+    
+    __tablename__ = 'colors'
+    
+    id_color = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False, unique=True)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+    
+    created_at = db.Column(
+        db.TIMESTAMP,
+        nullable=False,
+        server_default=func.current_timestamp()
+    )
+    updated_at = db.Column(
+        db.TIMESTAMP,
+        nullable=False,
+        server_default=func.current_timestamp(),
+        server_onupdate=func.current_timestamp()
+    )
+    deleted_at = db.Column(db.TIMESTAMP, nullable=True)
+    
+    created_by = db.Column(db.String(100), nullable=True)
+    updated_by = db.Column(db.String(100), nullable=True)
+    deleted_by = db.Column(db.String(100), nullable=True)
+    
+    def to_dict(self) -> dict:
+        """
+        Serializa el modelo a diccionario.
+        
+        Returns:
+            dict: Representación del color en formato diccionario
+        """
+        return {
+            'id_color': self.id_color,
+            'name': self.name,
+            'active': self.active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+```
+
+<Note>
+The `to_dict()` method is used to serialize model instances for JSON responses or template rendering.
+</Note>
+
+### WoodType Model
+
+Catalogs different types of wood materials.
+
+```python app/models/wood_type.py
+from sqlalchemy.sql import func
+from ..extensions import db
+
+class WoodType(db.Model):
+    """
+    Modelo de Tipo de Madera para catálogo de tipos de madera.
+    
+    Attributes:
+        id_wood_type: Identificador único del tipo de madera.
+        name: Nombre del tipo de madera.
+        description: Descripción opcional del tipo de madera.
+        active: Indica si el tipo de madera está activo o no.
+    """
+    
+    __tablename__ = 'wood_types'
+    
+    id_wood_type = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    description = db.Column(db.String(255), nullable=True)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+    
+    created_at = db.Column(
+        db.TIMESTAMP,
+        nullable=False,
+        server_default=func.current_timestamp()
+    )
+    updated_at = db.Column(
+        db.TIMESTAMP,
+        nullable=False,
+        server_default=func.current_timestamp(),
+        server_onupdate=func.current_timestamp()
+    )
+    deleted_at = db.Column(db.TIMESTAMP, nullable=True)
+    
+    created_by = db.Column(db.String(100), nullable=True)
+    updated_by = db.Column(db.String(100), nullable=True)
+    deleted_by = db.Column(db.String(100), nullable=True)
+    
+    def to_dict(self):
+        return {
+            'id_wood_type': self.id_wood_type,
+            'name': self.name,
+            'description': self.description,
+            'active': self.active,
+            'created_at': self.created_at,
+            'updated_at': self.updated_at,
+            'deleted_at': self.deleted_at,
+        }
+```
+
+### Role Model
+
+Manages user roles for permissions and access control.
+
+```python app/models/role.py
+from sqlalchemy.sql import func
+from ..extensions import db
+
+class Role(db.Model):
+    """
+    Modelo de Rol para la gestión de permisos y perfiles de usuario.
+    
+    Attributes:
+        id_role: Identificador único del rol.
+        name: Nombre del rol (ej. 'Admin', 'Editor', 'Viewer').
+        active: Indica si el rol está activo o no.
+    """
+    
+    __tablename__ = 'roles'
+    
+    id_role = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False, unique=True)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+    
+    created_at = db.Column(
+        db.TIMESTAMP,
+        nullable=False,
+        server_default=func.current_timestamp()
+    )
+    updated_at = db.Column(
+        db.TIMESTAMP,
+        nullable=False,
+        server_default=func.current_timestamp(),
+        server_onupdate=func.current_timestamp()
+    )
+    deleted_at = db.Column(db.TIMESTAMP, nullable=True)
+    
+    created_by = db.Column(db.String(100), nullable=True)
+    updated_by = db.Column(db.String(100), nullable=True)
+    deleted_by = db.Column(db.String(100), nullable=True)
+    
+    def to_dict(self) -> dict:
+        """
+        Serializa el modelo a diccionario.
+        
+        Returns:
+            dict: Representación del rol en formato diccionario
+        """
+        return {
+            'id_role': self.id_role,
+            'name': self.name,
+            'active': self.active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+```
+
+### UnitOfMeasure Model
+
+Manages measurement units for inventory and specifications.
+
+```python app/models/unit_of_measure.py
+from sqlalchemy.sql import func
+from ..extensions import db
+
+class UnitOfMeasure(db.Model):
+    """
+    Modelo de Unidades de medida para catálogo de referencias de unidades.
+    
+    Attributes:
+        id_unit_of_measure: Identificador único de la unidad.
+        name: Nombre de la unidad.
+        abbreviation: Abreviatura de la unidad.
+        active: Indica si la unidad está activo o no.
+    """
+    
+    __tablename__ = 'unit_of_measures'
+    
+    id_unit_of_measure = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False, unique=True)
+    abbreviation = db.Column(db.String(10), nullable=False, unique=True)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+    
+    created_at = db.Column(
+        db.TIMESTAMP,
+        nullable=False,
+        server_default=func.current_timestamp()
+    )
+    updated_at = db.Column(
+        db.TIMESTAMP,
+        nullable=False,
+        server_default=func.current_timestamp(),
+        server_onupdate=func.current_timestamp()
+    )
+    deleted_at = db.Column(db.TIMESTAMP, nullable=True)
+    
+    created_by = db.Column(db.String(100), nullable=True)
+    updated_by = db.Column(db.String(100), nullable=True)
+    deleted_by = db.Column(db.String(100), nullable=True)
+    
+    def to_dict(self) -> dict:
+        """
+        Convierte el objeto UnitOfMeasure a un diccionario.
+        
+        Returns:
+            dict: Diccionario con los atributos del objeto UnitOfMeasure
+        """
+        return {
+            'id_unit_of_measure': self.id_unit_of_measure,
+            'name': self.name,
+            'abbreviation': self.abbreviation,
+            'active': self.active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+```
+
+### FurnitureType Model
+
+Classifies different types of furniture.
+
+```python app/models/furniture_type.py
+from sqlalchemy.sql import func
+from ..extensions import db
+
+class FurnitureType(db.Model):
+    """
+    Modelo de Tipo de mueble para catálogo de tipo de mueble.
+    
+    Attributes:
+        id_furniture_type: Identificador único del tipo de mueble.
+        name: Nombre del tipo de mueble.
+        active: Indica si el tipo de mueble está activo o no.
+    """
+    
+    __tablename__ = 'furniture_type'
+    
+    id_furniture_type = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False, unique=True)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+    
+    created_at = db.Column(
+        db.TIMESTAMP,
+        nullable=False,
+        server_default=func.current_timestamp()
+    )
+    updated_at = db.Column(
+        db.TIMESTAMP,
+        nullable=False,
+        server_default=func.current_timestamp(),
+        server_onupdate=func.current_timestamp()
+    )
+    deleted_at = db.Column(db.TIMESTAMP, nullable=True)
+    
+    created_by = db.Column(db.String(100), nullable=True)
+    updated_by = db.Column(db.String(100), nullable=True)
+    deleted_by = db.Column(db.String(100), nullable=True)
+    
+    def to_dict(self) -> dict:
+        """
+        Serializa el modelo a diccionario.
+        
+        Returns:
+            dict: Representación del tipo de mueble en formato diccionario
+        """
+        return {
+            'id_furniture_type': self.id_furniture_type,
+            'name': self.name,
+            'active': self.active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+```
+
+## Model Registration
+
+All models are centrally imported in `app/models/__init__.py` to ensure SQLAlchemy can discover them:
+
+```python app/models/__init__.py
+from .color import Color
+from .role import Role
+from .wood_type import WoodType
+from .unit_of_measure import UnitOfMeasure
+from .furniture_type import FurnitureType
+```
+
+This file is then imported in the application factory:
+
+```python app/__init__.py
+def create_app():
+    # ...
+    # Import models to register them with SQLAlchemy
+    from . import models  # noqa: F401
+    # ...
+```
+
+<Warning>
+Always import the models module in the application factory **before** registering blueprints to ensure all models are available for migrations.
+</Warning>
+
+## Common Patterns
+
+### Soft Delete Pattern
+
+All models use soft delete instead of hard delete:
+
+```python
+# In service layer
+def delete(id_color: int) -> None:
+    """Soft delete a color."""
+    color = ColorService.get_by_id(id_color)
+    
+    color.active = False
+    color.deleted_at = func.current_timestamp()
+    
+    db.session.commit()
+```
+
+<Note>
+Soft deletes preserve data integrity and enable audit trails. Queries should filter by `active=True` to exclude deleted records.
+</Note>
+
+### Timestamp Management
+
+Timestamps are managed automatically by the database:
+
+```python
+created_at = db.Column(
+    db.TIMESTAMP,
+    nullable=False,
+    server_default=func.current_timestamp()  # Set on INSERT
+)
+
+updated_at = db.Column(
+    db.TIMESTAMP,
+    nullable=False,
+    server_default=func.current_timestamp(),
+    server_onupdate=func.current_timestamp()  # Update on UPDATE
+)
+```
+
+### Unique Constraints
+
+Most models enforce uniqueness on the `name` field:
+
+```python
+name = db.Column(db.String(50), nullable=False, unique=True)
+```
+
+Services check for duplicates before creating or updating:
+
+```python
+existing = Color.query.filter(
+    func.lower(Color.name) == name.lower()
+).first()
+if existing:
+    raise ConflictError(f"Ya existe un color con el nombre '{name}'")
+```
+
+## Model Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Descriptive Table Names">
+    Table names should be plural and descriptive:
+    
+    ```python
+    __tablename__ = 'colors'  # Good
+    __tablename__ = 'color'   # Avoid
+    ```
+  </Accordion>
+  
+  <Accordion title="Always Include Audit Fields">
+    Every model should include:
+    - `created_at`, `updated_at`, `deleted_at`
+    - `created_by`, `updated_by`, `deleted_by`
+    - `active` (for soft deletes)
+  </Accordion>
+  
+  <Accordion title="Implement to_dict() Methods">
+    Provide serialization methods for all models:
+    
+    ```python
+    def to_dict(self) -> dict:
+        return {
+            'id_color': self.id_color,
+            'name': self.name,
+            'active': self.active,
+        }
+    ```
+  </Accordion>
+  
+  <Accordion title="Use Server-Side Defaults">
+    Leverage database defaults for timestamps:
+    
+    ```python
+    server_default=func.current_timestamp()
+    server_onupdate=func.current_timestamp()
+    ```
+  </Accordion>
+  
+  <Accordion title="Document Model Attributes">
+    Include comprehensive docstrings:
+    
+    ```python
+    class Color(db.Model):
+        """
+        Modelo de Color para catálogo de referencias.
+        
+        Attributes:
+            id_color: Identificador único del color.
+            name: Nombre del color.
+            active: Indica si el color está activo.
+        """
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Field Types Reference
+
+| SQLAlchemy Type | Python Type | MySQL Type | Usage |
+|----------------|-------------|------------|-------|
+| `db.Integer` | int | INT | Primary keys, IDs |
+| `db.String(N)` | str | VARCHAR(N) | Names, short text |
+| `db.Boolean` | bool | TINYINT(1) | Flags, status |
+| `db.TIMESTAMP` | datetime | TIMESTAMP | Timestamps |
+| `db.Text` | str | TEXT | Long descriptions |
+| `db.Numeric(P,S)` | Decimal | DECIMAL(P,S) | Prices, measurements |
+
+## Querying Models
+
+### Basic Queries
+
+```python
+# Get all active records
+colors = Color.query.filter_by(active=True).all()
+
+# Get by ID
+color = Color.query.get(id_color)
+
+# Case-insensitive search
+color = Color.query.filter(
+    func.lower(Color.name) == name.lower()
+).first()
+
+# Count records
+count = Color.query.filter_by(active=True).count()
+```
+
+### Filtering Deleted Records
+
+```python
+# Exclude soft-deleted records
+active_colors = Color.query.filter_by(active=True).all()
+
+# Include all records (even deleted)
+all_colors = Color.query.all()
+
+# Only deleted records
+deleted_colors = Color.query.filter_by(active=False).all()
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Database Schema" icon="diagram-project" href="/architecture/database/schema">
+    View the complete database schema diagram
+  </Card>
+  <Card title="Migrations" icon="code-branch" href="/architecture/database/migrations">
+    Learn about the migration system
+  </Card>
+</CardGroup>

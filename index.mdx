@@ -1,97 +1,202 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Muebles Roble - Furniture Management System"
+description: "Comprehensive furniture manufacturing management system for controlling production from raw materials to finished products"
+mode: "custom"
 ---
 
-## Setting up
+<div className="relative overflow-hidden bg-gradient-to-br from-[#8B4513] via-[#6B3410] to-[#5C3317] py-20 dark:from-[#6B3410] dark:via-[#5C3317] dark:to-[#4A2810]">
+  <div className="absolute inset-0 bg-[url('/images/wood-texture.jpg')] opacity-5"></div>
+  <div className="relative max-w-6xl mx-auto px-6 lg:px-8">
+    <div className="lg:grid lg:grid-cols-12 lg:gap-8 items-center">
+      <div className="lg:col-span-7">
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6">
+          Welcome to Muebles Roble Documentation
+        </h1>
+        <p className="text-lg sm:text-xl text-white/90 mb-8 max-w-2xl">
+          Learn how to manage your furniture manufacturing process from raw materials to finished products with inventory tracking, catalog management, and production traceability.
+        </p>
+        <div className="flex flex-wrap gap-4">
+          <a 
+            href="/quickstart/installation" 
+            className="inline-flex items-center px-6 py-3 bg-white text-[#8B4513] font-semibold rounded-lg hover:bg-white/90 transition-colors"
+          >
+            Get Started
+            <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+          </a>
+          <a 
+            href="/features" 
+            className="inline-flex items-center px-6 py-3 border-2 border-white/30 bg-white/10 text-white font-semibold rounded-lg hover:bg-white/20 transition-colors"
+          >
+            Explore Features
+          </a>
+        </div>
+      </div>
+      <div className="hidden lg:block lg:col-span-5">
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-tr from-[#D2691E]/20 to-transparent rounded-2xl"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-Get your documentation site up and running in minutes.
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white mb-4">
+    Quick Start
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Get Muebles Roble up and running in your environment in minutes
+  </p>
+  
+  <Steps>
+    <Step title="Clone the repository and set up your environment">
+      First, clone the repository and create a virtual environment for the project.
+      
+      ```bash
+      git clone https://github.com/lattice-systems/muebles-roble-diseno-app.git
+      cd muebles-roble-diseno-app
+      python -m venv venv
+      source venv/bin/activate  # On Windows: venv\Scripts\activate
+      ```
+    </Step>
+    
+    <Step title="Install dependencies and configure the database">
+      Install all required Python packages and set up your database connection.
+      
+      ```bash
+      pip install -r requirements.txt
+      ```
+      
+      Create a `.env` file with your database credentials (use `.env-template` as reference).
+    </Step>
+    
+    <Step title="Run migrations and start the application">
+      Initialize the database schema and launch the Flask development server.
+      
+      ```bash
+      flask db upgrade
+      python run.py
+      ```
+      
+      The application will be available at `http://127.0.0.1:5000`
+    </Step>
+  </Steps>
+</div>
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white mb-4">
+    Core Features
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Explore the key capabilities of Muebles Roble
+  </p>
+  
+  <CardGroup cols={3}>
     <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
+      title="Catalog Management"
+      icon="book"
+      href="/features/catalogs/overview"
+    >
+      Manage wood types, colors, furniture types, roles, and units of measure
+    </Card>
+    <Card
+      title="Inventory Control"
+      icon="warehouse"
+      href="/features/inventory/raw-materials"
+    >
+      Track raw materials and finished products with real-time inventory updates
+    </Card>
+    <Card
+      title="Production Workflow"
+      icon="industry"
+      href="/features/production/workflow"
+    >
+      Manage the complete production process from material intake to finished goods
+    </Card>
+    <Card
+      title="MVC Architecture"
+      icon="diagram-project"
+      href="/architecture/overview"
+    >
+      Built on Flask with a clean layered MVC architecture using SQLAlchemy
+    </Card>
+    <Card
+      title="Form Validation"
+      icon="shield-check"
+      href="/development/forms"
+    >
+      WTForms-powered validation with CSRF protection and error handling
+    </Card>
+    <Card
+      title="Audit Tracking"
+      icon="clock-rotate-left"
+      href="/architecture/database/models"
+    >
+      Complete audit trail with soft deletion and timestamp tracking
+    </Card>
+  </CardGroup>
+</div>
 
-## Create beautiful pages
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white mb-4">
+    Documentation by Topic
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Find the information you need to work effectively with Muebles Roble
+  </p>
+  
+  <CardGroup cols={2}>
+    <Card
+      title="Installation Guide"
+      icon="download"
+      href="/quickstart/installation"
+    >
+      Step-by-step installation and environment setup instructions
+    </Card>
+    <Card
+      title="Configuration"
+      icon="gear"
+      href="/quickstart/configuration"
+    >
+      Configure database connections, environment variables, and application settings
+    </Card>
+    <Card
+      title="System Architecture"
+      icon="sitemap"
+      href="/architecture/mvc-layers"
+    >
+      Understand the layered MVC architecture and design patterns
+    </Card>
+    <Card
+      title="Developer Guide"
+      icon="code"
+      href="/development/setup"
+    >
+      Learn coding conventions, project structure, and development best practices
+    </Card>
+  </CardGroup>
+</div>
 
-Everything you need to create world-class documentation.
-
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
-
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="rounded-2xl border border-gray-200 dark:border-[#27272a] bg-gray-50 dark:bg-[#1a1d27] p-8 sm:p-12">
+    <div className="text-center max-w-3xl mx-auto">
+      <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white mb-4">
+        Ready to get started?
+      </h2>
+      <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+        Install Muebles Roble and start managing your furniture manufacturing process today
+      </p>
+      <a 
+        href="/quickstart/installation" 
+        className="inline-flex items-center px-6 py-3 bg-[#8B4513] text-white font-semibold rounded-lg hover:bg-[#6B3410] transition-colors"
+      >
+        Start Installation
+        <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+        </svg>
+      </a>
+    </div>
+  </div>
+</div>

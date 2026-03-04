@@ -1,0 +1,559 @@
+---
+title: "Deployment Guide"
+description: "Deploy the Muebles Roble application to production environments"
+---
+
+## Pre-Deployment Checklist
+
+Before deploying to production, ensure:
+
+<Steps>
+  <Step title="Environment Variables">
+    Configure production environment variables in `.env`:
+    - Set `FLASK_ENV=production`
+    - Generate secure `SECRET_KEY`
+    - Configure production database credentials
+  </Step>
+  
+  <Step title="Database Setup">
+    - Create production database
+    - Run migrations: `flask db upgrade`
+    - Verify database connection
+  </Step>
+  
+  <Step title="Code Quality">
+    - Run Black formatter: `black .`
+    - Run type checking: `mypy app/`
+    - Review code against conventions
+  </Step>
+  
+  <Step title="Security">
+    - Never commit `.env` file
+    - Use strong `SECRET_KEY`
+    - Enable HTTPS in production
+    - Review CSRF protection
+  </Step>
+</Steps>
+
+## Environment Configuration
+
+### Production Environment Variables
+
+Create a production `.env` file:
+
+```bash .env
+FLASK_APP=app.py
+FLASK_ENV=production
+
+# Database Configuration
+DB_USER=production_user
+DB_PASSWORD=strong_secure_password
+DB_HOST=production-db-host
+DB_PORT=3306
+DB_NAME=muebles_roble_db
+
+# Security
+SECRET_KEY=your-very-secure-random-secret-key-here
+```
+
+<Warning>
+  **CRITICAL**: The application will raise an error if `SECRET_KEY` is not set in production.
+</Warning>
+
+### Generating a Secure SECRET_KEY
+
+Generate a cryptographically secure secret key:
+
+```python
+import secrets
+print(secrets.token_hex(32))
+```
+
+Or using command line:
+
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+## Database Setup
+
+### Create Production Database
+
+```sql
+CREATE DATABASE muebles_roble_db 
+  CHARACTER SET utf8mb4 
+  COLLATE utf8mb4_unicode_ci;
+
+CREATE USER 'production_user'@'%' 
+  IDENTIFIED BY 'strong_secure_password';
+
+GRANT ALL PRIVILEGES ON muebles_roble_db.* 
+  TO 'production_user'@'%';
+
+FLUSH PRIVILEGES;
+```
+
+### Run Migrations
+
+Apply database schema:
+
+```bash
+flask db upgrade
+```
+
+### Verify Database Connection
+
+The `run.py` script includes a connection test:
+
+```bash
+python run.py
+```
+
+You should see:
+```
+Database connection successful!
+```
+
+## Production Server Options
+
+<Warning>
+  **Never use Flask's development server in production**. It's not designed for security or performance.
+</Warning>
+
+### Option 1: Gunicorn (Recommended)
+
+#### Install Gunicorn
+
+```bash
+pip install gunicorn
+```
+
+#### Run with Gunicorn
+
+```bash
+gunicorn -w 4 -b 0.0.0.0:8000 "app:create_app()"
+```
+
+Parameters:
+- `-w 4` - Number of worker processes (adjust based on CPU cores)
+- `-b 0.0.0.0:8000` - Bind to all interfaces on port 8000
+
+#### Gunicorn Configuration File
+
+Create `gunicorn.conf.py`:
+
+```python gunicorn.conf.py
+import multiprocessing
+
+# Server socket
+bind = "0.0.0.0:8000"
+backlog = 2048
+
+# Worker processes
+workers = multiprocessing.cpu_count() * 2 + 1
+worker_class = "sync"
+worker_connections = 1000
+timeout = 30
+keepalive = 2
+
+# Logging
+accesslog = "-"
+errorlog = "-"
+loglevel = "info"
+
+# Process naming
+proc_name = "muebles_roble"
+```
+
+Run with config:
+
+```bash
+gunicorn -c gunicorn.conf.py "app:create_app()"
+```
+
+### Option 2: uWSGI
+
+#### Install uWSGI
+
+```bash
+pip install uwsgi
+```
+
+#### Run with uWSGI
+
+```bash
+uwsgi --http :8000 --wsgi-file run.py --callable app --processes 4 --threads 2
+```
+
+#### uWSGI Configuration File
+
+Create `uwsgi.ini`:
+
+```ini uwsgi.ini
+[uwsgi]
+module = app:create_app()
+callable = app
+
+master = true
+processes = 4
+threads = 2
+
+http = :8000
+vacuum = true
+die-on-term = true
+```
+
+Run with config:
+
+```bash
+uwsgi --ini uwsgi.ini
+```
+
+## Reverse Proxy with Nginx
+
+### Install Nginx
+
+```bash
+# Ubuntu/Debian
+sudo apt install nginx
+
+# CentOS/RHEL
+sudo yum install nginx
+```
+
+### Nginx Configuration
+
+Create `/etc/nginx/sites-available/muebles-roble`:
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com www.your-domain.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /static {
+        alias /path/to/app/static;
+        expires 30d;
+    }
+}
+```
+
+### Enable Site
+
+```bash
+sudo ln -s /etc/nginx/sites-available/muebles-roble /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+## SSL/HTTPS with Let's Encrypt
+
+### Install Certbot
+
+```bash
+# Ubuntu/Debian
+sudo apt install certbot python3-certbot-nginx
+
+# CentOS/RHEL
+sudo yum install certbot python3-certbot-nginx
+```
+
+### Obtain SSL Certificate
+
+```bash
+sudo certbot --nginx -d your-domain.com -d www.your-domain.com
+```
+
+### Auto-renewal
+
+Certbot automatically sets up auto-renewal. Test it:
+
+```bash
+sudo certbot renew --dry-run
+```
+
+## Systemd Service
+
+### Create Service File
+
+Create `/etc/systemd/system/muebles-roble.service`:
+
+```ini
+[Unit]
+Description=Muebles Roble Gunicorn Application
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/path/to/muebles-roble
+Environment="PATH=/path/to/muebles-roble/venv/bin"
+ExecStart=/path/to/muebles-roble/venv/bin/gunicorn \
+    -c gunicorn.conf.py "app:create_app()"
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Enable and Start Service
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable muebles-roble
+sudo systemctl start muebles-roble
+sudo systemctl status muebles-roble
+```
+
+### Service Management
+
+```bash
+# Start service
+sudo systemctl start muebles-roble
+
+# Stop service
+sudo systemctl stop muebles-roble
+
+# Restart service
+sudo systemctl restart muebles-roble
+
+# View logs
+sudo journalctl -u muebles-roble -f
+```
+
+## Docker Deployment (Optional)
+
+### Dockerfile
+
+```dockerfile Dockerfile
+FROM python:3.10.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application
+COPY . .
+
+# Expose port
+EXPOSE 8000
+
+# Run with gunicorn
+CMD ["gunicorn", "-c", "gunicorn.conf.py", "app:create_app()"]
+```
+
+### Docker Compose
+
+```yaml docker-compose.yml
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - FLASK_ENV=production
+    env_file:
+      - .env
+    depends_on:
+      - db
+    restart: always
+
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: always
+
+volumes:
+  mysql_data:
+```
+
+### Run with Docker Compose
+
+```bash
+docker-compose up -d
+```
+
+## Monitoring and Logging
+
+### Application Logs
+
+View application logs:
+
+```bash
+# Systemd service logs
+sudo journalctl -u muebles-roble -f
+
+# Docker logs
+docker-compose logs -f web
+```
+
+### Error Tracking
+
+Consider integrating error tracking services:
+- Sentry
+- Rollbar
+- Bugsnag
+
+## Performance Optimization
+
+<AccordionGroup>
+  <Accordion title="Enable Database Connection Pooling">
+    Configure SQLAlchemy connection pooling:
+    
+    ```python config.py
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_size': 10,
+        'pool_recycle': 3600,
+        'pool_pre_ping': True,
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Use Database Indexes">
+    Add indexes to frequently queried columns:
+    
+    ```python
+    name = db.Column(db.String(50), nullable=False, unique=True, index=True)
+    ```
+  </Accordion>
+  
+  <Accordion title="Enable Gzip Compression">
+    In Nginx:
+    
+    ```nginx
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript;
+    ```
+  </Accordion>
+  
+  <Accordion title="Static File Caching">
+    Set cache headers in Nginx:
+    
+    ```nginx
+    location /static {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Security Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Environment Variables" icon="key">
+    - Never commit `.env` to version control
+    - Use strong `SECRET_KEY`
+    - Rotate secrets regularly
+  </Card>
+  
+  <Card title="HTTPS" icon="lock">
+    - Always use HTTPS in production
+    - Enable HSTS headers
+    - Use valid SSL certificates
+  </Card>
+  
+  <Card title="Database Security" icon="database">
+    - Use strong database passwords
+    - Restrict database access by IP
+    - Regular backups
+  </Card>
+  
+  <Card title="Updates" icon="arrow-rotate-right">
+    - Keep dependencies updated
+    - Monitor security advisories
+    - Apply security patches promptly
+  </Card>
+</CardGroup>
+
+## Backup Strategy
+
+### Database Backups
+
+Create automated MySQL backups:
+
+```bash
+#!/bin/bash
+# backup.sh
+
+BACKUP_DIR="/backups/mysql"
+DATE=$(date +%Y%m%d_%H%M%S)
+FILENAME="muebles_roble_$DATE.sql"
+
+mysqldump -u $DB_USER -p$DB_PASSWORD $DB_NAME > "$BACKUP_DIR/$FILENAME"
+gzip "$BACKUP_DIR/$FILENAME"
+
+# Keep only last 30 days
+find $BACKUP_DIR -type f -mtime +30 -delete
+```
+
+Schedule with cron:
+
+```bash
+0 2 * * * /path/to/backup.sh
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Application won't start">
+    - Check `SECRET_KEY` is set in `.env`
+    - Verify database connection
+    - Review error logs: `sudo journalctl -u muebles-roble`
+    - Ensure virtual environment is activated
+  </Accordion>
+  
+  <Accordion title="Database connection errors">
+    - Verify MySQL is running
+    - Check credentials in `.env`
+    - Test connection: `python run.py`
+    - Check firewall rules
+  </Accordion>
+  
+  <Accordion title="502 Bad Gateway">
+    - Ensure Gunicorn/uWSGI is running
+    - Check Nginx configuration
+    - Verify proxy_pass address
+    - Review Nginx error logs
+  </Accordion>
+  
+  <Accordion title="Permission errors">
+    - Check file ownership: `chown -R www-data:www-data /path/to/app`
+    - Verify directory permissions
+    - Check systemd service user
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Environment Variables" icon="key" href="/development/environment-variables">
+    Complete environment configuration reference
+  </Card>
+  <Card title="Setup Guide" icon="rocket" href="/development/setup">
+    Return to development setup
+  </Card>
+  <Card title="Project Structure" icon="folder-tree" href="/development/project-structure">
+    Understand the application architecture
+  </Card>
+  <Card title="Coding Conventions" icon="code" href="/development/coding-conventions">
+    Follow best practices
+  </Card>
+</CardGroup>

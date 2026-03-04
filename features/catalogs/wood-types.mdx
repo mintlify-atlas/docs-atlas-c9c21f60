@@ -1,0 +1,372 @@
+---
+title: Wood Types Catalog
+description: Define and manage wood materials used in furniture production
+---
+
+## Overview
+
+The Wood Types catalog stores different types of wood materials available for furniture manufacturing. Each entry includes a name and optional description.
+
+## Data Model
+
+The `WoodType` model is defined in `app/models/wood_type.py:5`:
+
+```python
+class WoodType(db.Model):
+    __tablename__ = 'wood_types'
+    
+    id_wood_type = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    description = db.Column(db.String(255), nullable=True)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+    
+    created_at = db.Column(db.TIMESTAMP, server_default=func.current_timestamp())
+    updated_at = db.Column(db.TIMESTAMP, server_onupdate=func.current_timestamp())
+    deleted_at = db.Column(db.TIMESTAMP, nullable=True)
+    
+    created_by = db.Column(db.String(100), nullable=True)
+    updated_by = db.Column(db.String(100), nullable=True)
+    deleted_by = db.Column(db.String(100), nullable=True)
+```
+
+### Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id_wood_type` | Integer | Primary key |
+| `name` | String(100) | Unique wood type name |
+| `description` | String(255) | Optional description |
+| `active` | Boolean | Soft delete flag |
+| `created_at` | Timestamp | Record creation date |
+| `updated_at` | Timestamp | Last modification date |
+| `deleted_at` | Timestamp | Logical deletion date |
+
+<Info>
+Unlike the Colors catalog, Wood Types include an optional `description` field for additional material details.
+</Info>
+
+## Service Layer
+
+The `WoodTypeService` class in `app/catalogs/wood_types/services.py:11` provides business logic:
+
+### Get All Wood Types
+
+Retrieves all active wood types:
+
+```python
+wood_types = WoodTypeService.get_all()
+```
+
+Implementation from `services.py:15`:
+```python
+@staticmethod
+def get_all() -> list[WoodType]:
+    return WoodType.query.filter_by(active=True).all()
+```
+
+### Create Wood Type
+
+Creates a new wood type with name and optional description:
+
+```python
+data = {
+    "name": "Cedar",
+    "description": "Aromatic softwood ideal for closets"
+}
+wood_type = WoodTypeService.create(data)
+```
+
+Implementation from `services.py:25`:
+```python
+@staticmethod
+def create(data: dict) -> dict:
+    name = data.get("name")
+    description = data.get("description")
+    
+    if not name or not name.strip():
+        raise ValidationError("El nombre del tipo de madera es requerido")
+    
+    name = name.strip()
+    
+    existing = WoodType.query.filter_by(name=name).first()
+    if existing:
+        raise ConflictError(f"Ya existe un tipo de madera con el nombre '{name}'")
+    
+    wood_type = WoodType(name=name, description=description)
+    db.session.add(wood_type)
+    db.session.commit()
+    
+    return wood_type.to_dict()
+```
+
+### Get Wood Type by ID
+
+Retrieves a specific wood type:
+
+```python
+wood_type = WoodTypeService.get_by_id(id_wood_type)
+```
+
+Implementation from `services.py:63`:
+```python
+@staticmethod
+def get_by_id(id_wood_type: int) -> WoodType:
+    wood_type = WoodType.query.get(id_wood_type)
+    if not wood_type:
+        raise NotFoundError(f"No se encontró el tipo de madera con ID {id_wood_type}")
+    return wood_type
+```
+
+### Update Wood Type
+
+Updates an existing wood type:
+
+```python
+data = {
+    "name": "Red Cedar",
+    "description": "Premium aromatic cedar wood"
+}
+WoodTypeService.update(id_wood_type, data)
+```
+
+Implementation from `services.py:82`:
+```python
+@staticmethod
+def update(id_wood_type: int, data: dict) -> dict:
+    wood_type = WoodType.query.get(id_wood_type)
+    if not wood_type or not wood_type.active:
+        raise NotFoundError(f"No se encontró el tipo de madera con ID {id_wood_type}")
+    
+    name = data.get("name")
+    description = data.get("description")
+    
+    if not name or not name.strip():
+        raise ValidationError("El nombre del tipo de madera es requerido")
+    
+    name = name.strip()
+    
+    existing = WoodType.query.filter(
+        WoodType.name == name, 
+        WoodType.id_wood_type != id_wood_type
+    ).first()
+    if existing:
+        raise ConflictError(f"Ya existe otro tipo de madera con el nombre '{name}'")
+    
+    wood_type.name = name
+    wood_type.description = description
+    db.session.commit()
+    
+    return wood_type.to_dict()
+```
+
+### Delete Wood Type
+
+Performs a soft delete:
+
+```python
+WoodTypeService.delete(id_wood_type)
+```
+
+Implementation from `services.py:126`:
+```python
+@staticmethod
+def delete(id_wood_type: int) -> None:
+    wood_type = WoodType.query.get(id_wood_type)
+    if not wood_type or not wood_type.active:
+        raise NotFoundError(f"No se encontró el tipo de madera con ID {id_wood_type}")
+    
+    wood_type.active = False
+    db.session.commit()
+```
+
+## Routes
+
+The routes module (`app/catalogs/wood_types/routes.py`) defines HTTP endpoints:
+
+### List Wood Types
+
+**Endpoint:** `GET /wood-types/`
+
+```python
+@woods_types_bp.route("/", methods=["GET"])
+def list_wood_types():
+    wood_types = WoodTypeService.get_all()
+    return render_template("wood_types/list.html", wood_types=wood_types)
+```
+
+### Create Wood Type
+
+**Endpoint:** `GET/POST /wood-types/create`
+
+From `routes.py:22`:
+```python
+@woods_types_bp.route("/create", methods=["GET", "POST"])
+def create_wood_type():
+    form = WoodTypeForm()
+    
+    if form.validate_on_submit():
+        data = {
+            "name": form.name.data,
+            "description": form.description.data
+        }
+        try:
+            WoodTypeService.create(data)
+            flash("Tipo de madera creado exitosamente", "success")
+            return redirect(url_for("woods_types.create_wood_type"))
+        except ConflictError as e:
+            flash(e.message, "error")
+    
+    return render_template("wood_types/create.html", form=form)
+```
+
+### Edit Wood Type
+
+**Endpoint:** `GET/POST /wood-types/<id_wood_type>/edit`
+
+From `routes.py:49`:
+```python
+@woods_types_bp.route("/<int:id_wood_type>/edit", methods=["GET", "POST"])
+def edit_wood_type(id_wood_type: int):
+    form = WoodTypeForm()
+    
+    if form.validate_on_submit():
+        data = {
+            "name": form.name.data,
+            "description": form.description.data
+        }
+        try:
+            WoodTypeService.update(id_wood_type, data)
+            flash("Tipo de madera actualizado exitosamente", "success")
+            return redirect(url_for("woods_types.edit_wood_type", id_wood_type=id_wood_type))
+        except ConflictError as e:
+            flash(e.message, "error")
+    
+    wood_type = WoodTypeService.get_by_id(id_wood_type)
+    if not wood_type:
+        flash("Tipo de madera no encontrado", "error")
+        return redirect(url_for("woods_types.list_wood_types"))
+    
+    form.name.data = wood_type.name
+    form.description.data = wood_type.description
+    
+    return render_template("wood_types/edit.html", form=form, wood_type=wood_type)
+```
+
+### Delete Wood Type
+
+**Endpoint:** `POST /wood-types/<id_wood_type>/delete`
+
+From `routes.py:86`:
+```python
+@woods_types_bp.route("/<int:id_wood_type>/delete", methods=["POST"])
+def delete_wood_type(id_wood_type: int):
+    try:
+        WoodTypeService.delete(id_wood_type)
+        flash("Tipo de madera eliminado exitosamente", "success")
+    except Exception as e:
+        flash(str(e), "error")
+    
+    return redirect(url_for("woods_types.list_wood_types"))
+```
+
+## Form Definition
+
+The `WoodTypeForm` class in `app/catalogs/wood_types/forms.py:10` defines the input form:
+
+```python
+class WoodTypeForm(FlaskForm):
+    name = StringField(
+        "Nombre",
+        validators=[
+            DataRequired(message="El nombre del tipo de madera es requerido"),
+            Length(min=3, max=50, message="El nombre no puede exceder 50 caracteres"),
+        ],
+    )
+    description = StringField(
+        "Descripción",
+        validators=[
+            Length(max=200, message="La descripción no puede exceder 200 caracteres"),
+        ],
+    )
+```
+
+### Validators
+
+| Field | Validators |
+|-------|------------|
+| `name` | DataRequired, Length(min=3, max=50) |
+| `description` | Length(max=200) - Optional |
+
+<Note>
+The `description` field is optional and has no `DataRequired` validator.
+</Note>
+
+## Usage Examples
+
+### Creating a Wood Type
+
+```python
+from app.catalogs.wood_types.services import WoodTypeService
+
+# Create with description
+wood_data = {
+    "name": "Oak",
+    "description": "Strong hardwood with prominent grain"
+}
+result = WoodTypeService.create(wood_data)
+
+# Create without description
+wood_data = {"name": "Pine"}
+result = WoodTypeService.create(wood_data)
+```
+
+### Common Wood Types
+
+Typical entries in a furniture manufacturing system:
+
+<CardGroup cols={2}>
+  <Card title="Hardwoods">
+    - Oak (Roble)
+    - Walnut (Nogal)
+    - Maple (Arce)
+    - Cherry (Cerezo)
+  </Card>
+  <Card title="Softwoods">
+    - Pine (Pino)
+    - Cedar (Cedro)
+    - Fir (Abeto)
+    - Spruce (Picea)
+  </Card>
+</CardGroup>
+
+### Listing Wood Types
+
+```python
+# Get all active wood types
+wood_types = WoodTypeService.get_all()
+for wood in wood_types:
+    print(f"{wood.name}: {wood.description}")
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Use Standard Names">
+    Use common wood species names (e.g., "Oak", "Pine", "Cedar")
+  </Step>
+  <Step title="Add Descriptions">
+    Provide helpful descriptions to distinguish similar wood types
+  </Step>
+  <Step title="Validate Before Creating">
+    Check for duplicates before attempting to create new entries
+  </Step>
+  <Step title="Handle Exceptions">
+    Always catch `ConflictError` and `ValidationError` exceptions
+  </Step>
+</Steps>
+
+## Related Documentation
+
+- [Catalogs Overview](/features/catalogs/overview)
+- [Colors Catalog](/features/catalogs/colors)
+- [Raw Materials Inventory](/features/inventory/raw-materials)

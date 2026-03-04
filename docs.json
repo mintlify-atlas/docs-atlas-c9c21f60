@@ -1,122 +1,130 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Muebles Roble - Furniture Management System",
+  "theme": "maple",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#8B4513",
+    "light": "#D2691E",
+    "dark": "#5C3317"
   },
   "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/lattice-systems/muebles-roble-diseno-app"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/lattice-systems/muebles-roble-diseno-app"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Get Started",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Overview",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "introduction",
+              "features"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Quickstart",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
-            ]
-          },
-          {
-            "group": "Writing content",
-            "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
-            ]
-          },
-          {
-            "group": "AI tools",
-            "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "quickstart/installation",
+              "quickstart/configuration",
+              "quickstart/first-steps"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "Core Features",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Catalog Management",
             "pages": [
-              "api-reference/introduction"
+              "features/catalogs/overview",
+              "features/catalogs/colors",
+              "features/catalogs/wood-types",
+              "features/catalogs/furniture-types",
+              "features/catalogs/roles",
+              "features/catalogs/units-of-measure"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Inventory",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "features/inventory/raw-materials",
+              "features/inventory/finished-products"
+            ]
+          },
+          {
+            "group": "Production",
+            "pages": [
+              "features/production/workflow",
+              "features/production/traceability"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Architecture",
+        "groups": [
+          {
+            "group": "System Design",
+            "pages": [
+              "architecture/overview",
+              "architecture/mvc-layers",
+              "architecture/modules"
+            ]
+          },
+          {
+            "group": "Database",
+            "pages": [
+              "architecture/database/models",
+              "architecture/database/migrations",
+              "architecture/database/schema"
+            ]
+          },
+          {
+            "group": "Error Handling",
+            "pages": [
+              "architecture/error-handling"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Development",
+        "groups": [
+          {
+            "group": "Developer Guide",
+            "pages": [
+              "development/setup",
+              "development/project-structure",
+              "development/coding-conventions"
+            ]
+          },
+          {
+            "group": "Templates & Forms",
+            "pages": [
+              "development/templates",
+              "development/forms"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "development/deployment",
+              "development/environment-variables"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

@@ -1,0 +1,150 @@
+---
+title: Catalogs Overview
+description: Understand the catalog system that manages core business data in Muebles Roble
+---
+
+## What are Catalogs?
+
+Catalogs are reference tables that store fundamental business data used throughout the Muebles Roble system. They provide standardized options for colors, wood types, furniture types, user roles, and measurement units.
+
+## Available Catalogs
+
+<CardGroup cols={2}>
+  <Card title="Colors" icon="palette" href="/features/catalogs/colors">
+    Manage color options for furniture finishes
+  </Card>
+  <Card title="Wood Types" icon="tree" href="/features/catalogs/wood-types">
+    Define types of wood used in production
+  </Card>
+  <Card title="Furniture Types" icon="chair" href="/features/catalogs/furniture-types">
+    Categorize furniture products (tables, chairs, closets)
+  </Card>
+  <Card title="Roles" icon="user-tag" href="/features/catalogs/roles">
+    Manage user roles and permissions
+  </Card>
+  <Card title="Units of Measure" icon="ruler" href="/features/catalogs/units-of-measure">
+    Define measurement units for materials and products
+  </Card>
+</CardGroup>
+
+## Common Features
+
+All catalog modules share a consistent architecture and functionality:
+
+### CRUD Operations
+
+Every catalog supports:
+- **Create**: Add new entries with validation
+- **Read**: List all active entries and view details
+- **Update**: Modify existing entries
+- **Delete**: Soft delete (logical deletion) that preserves data
+
+### Soft Delete Pattern
+
+Catalogs use logical deletion rather than physical deletion:
+
+```python
+def delete(id: int) -> None:
+    entity = Service.get_by_id(id)
+    entity.active = False
+    entity.deleted_at = func.current_timestamp()
+    db.session.commit()
+```
+
+This approach:
+- Preserves historical data
+- Maintains referential integrity
+- Supports data recovery
+- Enables audit trails
+
+### Data Validation
+
+All catalogs enforce business rules:
+
+<Steps>
+  <Step title="Required Fields">
+    Forms validate that required fields are not empty
+  </Step>
+  <Step title="Length Constraints">
+    Field length is validated (e.g., names limited to 50 characters)
+  </Step>
+  <Step title="Uniqueness">
+    Names must be unique within each catalog
+  </Step>
+  <Step title="Conflict Detection">
+    Duplicate entries are prevented with clear error messages
+  </Step>
+</Steps>
+
+### Exception Handling
+
+The system uses custom exceptions for clear error handling:
+
+| Exception | Usage |
+|-----------|-------|
+| `ValidationError` | Empty or invalid input data |
+| `ConflictError` | Duplicate names or constraint violations |
+| `NotFoundError` | Entity not found by ID |
+
+## Architecture Pattern
+
+All catalogs follow a consistent three-layer architecture:
+
+```
+┌─────────────────────────────────────┐
+│  routes.py (Presentation Layer)     │
+│  Handles HTTP requests & responses  │
+├─────────────────────────────────────┤
+│  services.py (Business Logic)       │
+│  Validation & business rules        │
+├─────────────────────────────────────┤
+│  models/ (Data Layer)               │
+│  SQLAlchemy ORM entities            │
+└─────────────────────────────────────┘
+```
+
+### File Organization
+
+Each catalog module contains:
+
+```
+app/catalogs/{catalog_name}/
+├── __init__.py      # Blueprint registration
+├── routes.py        # Route handlers (GET/POST)
+├── services.py      # Business logic layer
+└── forms.py         # WTForms definitions
+```
+
+## Common Model Structure
+
+All catalog models inherit standard fields:
+
+```python
+class CatalogEntity(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False, unique=True)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+    
+    # Audit fields
+    created_at = db.Column(db.TIMESTAMP, server_default=func.current_timestamp())
+    updated_at = db.Column(db.TIMESTAMP, server_onupdate=func.current_timestamp())
+    deleted_at = db.Column(db.TIMESTAMP, nullable=True)
+    
+    created_by = db.Column(db.String(100), nullable=True)
+    updated_by = db.Column(db.String(100), nullable=True)
+    deleted_by = db.Column(db.String(100), nullable=True)
+```
+
+<Note>
+Audit fields (`created_by`, `updated_by`, `deleted_by`) are currently optional and ready for future authentication integration.
+</Note>
+
+## Next Steps
+
+Explore individual catalog modules:
+
+- [Colors](/features/catalogs/colors) - Manage furniture color options
+- [Wood Types](/features/catalogs/wood-types) - Define wood materials
+- [Furniture Types](/features/catalogs/furniture-types) - Categorize products
+- [Roles](/features/catalogs/roles) - Configure user permissions
+- [Units of Measure](/features/catalogs/units-of-measure) - Set up measurement units

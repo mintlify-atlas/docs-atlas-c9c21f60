@@ -1,0 +1,337 @@
+---
+title: Furniture Types Catalog
+description: Categorize and manage different types of furniture products
+---
+
+## Overview
+
+The Furniture Types catalog defines categories of furniture products manufactured by the system. Examples include tables, chairs, closets, and other furniture items.
+
+## Data Model
+
+The `FurnitureType` model is defined in `app/models/furniture_type.py:6`:
+
+```python
+class FurnitureType(db.Model):
+    __tablename__ = 'furniture_type'
+    
+    id_furniture_type = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False, unique=True)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+    
+    created_at = db.Column(db.TIMESTAMP, server_default=func.current_timestamp())
+    updated_at = db.Column(db.TIMESTAMP, server_onupdate=func.current_timestamp())
+    deleted_at = db.Column(db.TIMESTAMP, nullable=True)
+    
+    created_by = db.Column(db.String(100), nullable=True)
+    updated_by = db.Column(db.String(100), nullable=True)
+    deleted_by = db.Column(db.String(100), nullable=True)
+```
+
+### Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id_furniture_type` | Integer | Primary key |
+| `name` | String(50) | Unique furniture type name |
+| `active` | Boolean | Soft delete flag |
+| `created_at` | Timestamp | Record creation date |
+| `updated_at` | Timestamp | Last modification date |
+| `deleted_at` | Timestamp | Logical deletion date |
+
+## Service Layer
+
+The `FurnitureTypeService` class in `app/catalogs/furniture_type/services.py:13` provides business logic:
+
+### Get All Furniture Types
+
+Retrieves all active furniture types:
+
+```python
+furniture_types = FurnitureTypeService.get_all()
+```
+
+Implementation from `services.py:17`:
+```python
+@staticmethod
+def get_all() -> list[FurnitureType]:
+    return FurnitureType.query.filter_by(active=True).all()
+```
+
+### Create Furniture Type
+
+Creates a new furniture type:
+
+```python
+data = {"name": "Dining Table"}
+furniture_type = FurnitureTypeService.create(data)
+```
+
+Implementation from `services.py:27`:
+```python
+@staticmethod
+def create(data: dict) -> dict:
+    name = data.get("name")
+    
+    if not name or not name.strip():
+        raise ValidationError("El nombre del tipo de mueble es requerido")
+    
+    name = name.strip()
+    
+    existing = FurnitureType.query.filter_by(name=name).first()
+    if existing:
+        raise ConflictError(f"Ya existe un tipo de mueble con el nombre '{name}'")
+    
+    furniture_type = FurnitureType(name=name)
+    db.session.add(furniture_type)
+    db.session.commit()
+    
+    return furniture_type.to_dict()
+```
+
+### Get Furniture Type by ID
+
+Retrieves a specific furniture type:
+
+```python
+furniture_type = FurnitureTypeService.get_by_id(id_furniture_type)
+```
+
+Implementation from `services.py:64`:
+```python
+@staticmethod
+def get_by_id(id_furniture_type: int) -> FurnitureType:
+    furniture_type = FurnitureType.query.get(id_furniture_type)
+    if not furniture_type:
+        raise NotFoundError(f"No se encontró el tipo de mueble con ID {id_furniture_type}")
+    return furniture_type
+```
+
+### Update Furniture Type
+
+Updates an existing furniture type:
+
+```python
+data = {"name": "Coffee Table"}
+FurnitureTypeService.update(id_furniture_type, data)
+```
+
+Implementation from `services.py:83`:
+```python
+@staticmethod
+def update(id_furniture_type: int, data: dict) -> dict:
+    furniture_type = FurnitureTypeService.get_by_id(id_furniture_type)
+    
+    name = data.get("name")
+    if not name or not name.strip():
+        raise ValidationError("El nombre del furniture_type es requerido")
+    
+    name = name.strip()
+    
+    existing = FurnitureType.query.filter(
+        FurnitureType.name == name, 
+        FurnitureType.id_furniture_type != id_furniture_type
+    ).first()
+    if existing:
+        raise ConflictError(f"Ya existe un tipo de mueble con el nombre '{name}'")
+    
+    furniture_type.name = name
+    db.session.commit()
+    
+    return furniture_type.to_dict()
+```
+
+### Delete Furniture Type
+
+Performs a soft delete:
+
+```python
+FurnitureTypeService.delete(id_furniture_type)
+```
+
+Implementation from `services.py:123`:
+```python
+@staticmethod
+def delete(id_furniture_type: int) -> None:
+    furniture_type = FurnitureTypeService.get_by_id(id_furniture_type)
+    furniture_type.active = False
+    furniture_type.deleted_at = func.current_timestamp()
+    db.session.commit()
+```
+
+## Routes
+
+The routes module (`app/catalogs/furniture_type/routes.py`) defines HTTP endpoints:
+
+### List Furniture Types
+
+**Endpoint:** `GET /furniture-types/`
+
+From `routes.py:13`:
+```python
+@furniture_type_bp.route("/", methods=["GET"])
+def list_furniture_type():
+    furniture_type = FurnitureTypeService.get_all()
+    return render_template("furniture_type/list.html", furniture_type=furniture_type)
+```
+
+### Create Furniture Type
+
+**Endpoint:** `GET/POST /furniture-types/create`
+
+From `routes.py:25`:
+```python
+@furniture_type_bp.route("/create", methods=["GET", "POST"])
+def create_furniture_type():
+    form = FurnitureTypeForm()
+    
+    if form.validate_on_submit():
+        data = {"name": form.name.data}
+        try:
+            FurnitureTypeService.create(data)
+            flash("Tipo de mueble creado exitosamente", "success")
+            return redirect(url_for("furniture_type.create_furniture_type"))
+        except ConflictError as e:
+            flash(e.message, "error")
+    
+    return render_template("furniture_type/create.html", form=form)
+```
+
+## Form Definition
+
+The `FurnitureTypeForm` class in `app/catalogs/furniture_type/forms.py:10` defines the input form:
+
+```python
+class FurnitureTypeForm(FlaskForm):
+    name = StringField(
+        "Nombre",
+        validators=[
+            DataRequired(message="El nombre del tipo de mueble es requerido"),
+            Length(max=50, message="El nombre no puede exceder 50 caracteres"),
+        ],
+    )
+```
+
+### Validators
+
+<Steps>
+  <Step title="DataRequired">
+    Ensures the name field is not empty
+  </Step>
+  <Step title="Length">
+    Validates that the name does not exceed 50 characters
+  </Step>
+</Steps>
+
+## Usage Examples
+
+### Common Furniture Types
+
+Typical categories in a furniture manufacturing system:
+
+<CardGroup cols={2}>
+  <Card title="Seating">
+    - Chair (Silla)
+    - Armchair (Sillón)
+    - Bench (Banco)
+    - Stool (Taburete)
+  </Card>
+  <Card title="Tables">
+    - Dining Table (Mesa de comedor)
+    - Coffee Table (Mesa de centro)
+    - Desk (Escritorio)
+    - Side Table (Mesa auxiliar)
+  </Card>
+  <Card title="Storage">
+    - Closet (Closet)
+    - Dresser (Cómoda)
+    - Bookshelf (Librero)
+    - Cabinet (Gabinete)
+  </Card>
+  <Card title="Beds">
+    - Bed Frame (Cama)
+    - Bunk Bed (Litera)
+    - Headboard (Cabecera)
+    - Nightstand (Buró)
+  </Card>
+</CardGroup>
+
+### Creating Furniture Types
+
+```python
+from app.catalogs.furniture_type.services import FurnitureTypeService
+
+# Create common furniture types
+furniture_types = [
+    {"name": "Mesa"},
+    {"name": "Silla"},
+    {"name": "Closet"},
+    {"name": "Escritorio"}
+]
+
+for ft_data in furniture_types:
+    try:
+        result = FurnitureTypeService.create(ft_data)
+        print(f"Created: {result['name']}")
+    except ConflictError as e:
+        print(f"Already exists: {ft_data['name']}")
+```
+
+### Listing Furniture Types
+
+```python
+# Get all active furniture types
+furniture_types = FurnitureTypeService.get_all()
+for ft in furniture_types:
+    print(f"ID {ft.id_furniture_type}: {ft.name}")
+```
+
+## Best Practices
+
+<Accordion title="Use Generic Categories">
+  Define broad categories rather than specific products:
+  - Good: "Table", "Chair", "Cabinet"
+  - Avoid: "4-Person Oak Dining Table", "Red Office Chair"
+</Accordion>
+
+<Accordion title="Consistent Naming">
+  Use singular nouns and maintain consistent language:
+  ```python
+  # Good
+  "Chair", "Table", "Closet"
+  
+  # Avoid
+  "Chairs", "dining tables", "CLOSET"
+  ```
+</Accordion>
+
+<Accordion title="Plan for Product Variants">
+  Furniture types should be reusable across multiple products:
+  - One "Table" type can apply to dining tables, coffee tables, etc.
+  - Use additional attributes (size, color, wood type) to differentiate
+</Accordion>
+
+## Integration with Production
+
+Furniture types serve as categories for finished products:
+
+```python
+# Example: Link furniture type to product
+product = {
+    "name": "Oak Dining Table",
+    "furniture_type_id": 1,  # References "Table" furniture type
+    "wood_type_id": 2,       # Oak
+    "color_id": 5            # Natural
+}
+```
+
+<Info>
+Furniture types are foundational data for the inventory and production modules.
+</Info>
+
+## Related Documentation
+
+- [Catalogs Overview](/features/catalogs/overview)
+- [Colors Catalog](/features/catalogs/colors)
+- [Wood Types Catalog](/features/catalogs/wood-types)
+- [Finished Products Inventory](/features/inventory/finished-products)

@@ -1,0 +1,454 @@
+---
+title: Database Schema
+description: Complete database schema and table relationships
+---
+
+## Schema Overview
+
+The Muebles Roble database schema is designed to support a furniture management system with catalogs for colors, wood types, roles, units of measure, and furniture types.
+
+## Current Tables
+
+<CardGroup cols={2}>
+  <Card title="colors" icon="palette">
+    5 records - Color catalog for furniture
+  </Card>
+  <Card title="roles" icon="user-shield">
+    User roles for access control
+  </Card>
+  <Card title="wood_types" icon="tree">
+    Wood material classifications
+  </Card>
+  <Card title="unit_of_measures" icon="ruler">
+    Measurement units (cm, m, kg, etc.)
+  </Card>
+  <Card title="furniture_type" icon="couch">
+    Furniture category classifications
+  </Card>
+</CardGroup>
+
+## Table Schemas
+
+### colors
+
+Stores color catalog entries for furniture references.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id_color` | INTEGER | PRIMARY KEY | Unique identifier |
+| `name` | VARCHAR(50) | NOT NULL, UNIQUE | Color name |
+| `active` | BOOLEAN | NOT NULL, DEFAULT TRUE | Active status |
+| `created_at` | TIMESTAMP | NOT NULL, DEFAULT CURRENT_TIMESTAMP | Creation timestamp |
+| `updated_at` | TIMESTAMP | NOT NULL, DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | Last update timestamp |
+| `deleted_at` | TIMESTAMP | NULL | Soft delete timestamp |
+| `created_by` | VARCHAR(100) | NULL | User who created record |
+| `updated_by` | VARCHAR(100) | NULL | User who updated record |
+| `deleted_by` | VARCHAR(100) | NULL | User who deleted record |
+
+**Indexes:**
+- PRIMARY KEY on `id_color`
+- UNIQUE INDEX on `name`
+
+### roles
+
+Manages user roles for permissions and access control.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id_role` | INTEGER | PRIMARY KEY | Unique identifier |
+| `name` | VARCHAR(50) | NOT NULL, UNIQUE | Role name (e.g., 'Admin', 'Editor') |
+| `active` | BOOLEAN | NOT NULL, DEFAULT TRUE | Active status |
+| `created_at` | TIMESTAMP | NOT NULL, DEFAULT CURRENT_TIMESTAMP | Creation timestamp |
+| `updated_at` | TIMESTAMP | NOT NULL, DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | Last update timestamp |
+| `deleted_at` | TIMESTAMP | NULL | Soft delete timestamp |
+| `created_by` | VARCHAR(100) | NULL | User who created record |
+| `updated_by` | VARCHAR(100) | NULL | User who updated record |
+| `deleted_by` | VARCHAR(100) | NULL | User who deleted record |
+
+**Indexes:**
+- PRIMARY KEY on `id_role`
+- UNIQUE INDEX on `name`
+
+### wood_types
+
+Catalogs different types of wood materials.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id_wood_type` | INTEGER | PRIMARY KEY | Unique identifier |
+| `name` | VARCHAR(100) | NOT NULL, UNIQUE | Wood type name |
+| `description` | VARCHAR(255) | NULL | Optional description |
+| `active` | BOOLEAN | NOT NULL, DEFAULT TRUE | Active status |
+| `created_at` | TIMESTAMP | NOT NULL, DEFAULT CURRENT_TIMESTAMP | Creation timestamp |
+| `updated_at` | TIMESTAMP | NOT NULL, DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | Last update timestamp |
+| `deleted_at` | TIMESTAMP | NULL | Soft delete timestamp |
+| `created_by` | VARCHAR(100) | NULL | User who created record |
+| `updated_by` | VARCHAR(100) | NULL | User who updated record |
+| `deleted_by` | VARCHAR(100) | NULL | User who deleted record |
+
+**Indexes:**
+- PRIMARY KEY on `id_wood_type`
+- UNIQUE INDEX on `name`
+
+### unit_of_measures
+
+Manages measurement units for inventory and specifications.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id_unit_of_measure` | INTEGER | PRIMARY KEY | Unique identifier |
+| `name` | VARCHAR(50) | NOT NULL, UNIQUE | Unit name (e.g., "Centimeter") |
+| `abbreviation` | VARCHAR(10) | NOT NULL, UNIQUE | Unit abbreviation (e.g., "cm") |
+| `active` | BOOLEAN | NOT NULL, DEFAULT TRUE | Active status |
+| `created_at` | TIMESTAMP | NOT NULL, DEFAULT CURRENT_TIMESTAMP | Creation timestamp |
+| `updated_at` | TIMESTAMP | NOT NULL, DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | Last update timestamp |
+| `deleted_at` | TIMESTAMP | NULL | Soft delete timestamp |
+| `created_by` | VARCHAR(100) | NULL | User who created record |
+| `updated_by` | VARCHAR(100) | NULL | User who updated record |
+| `deleted_by` | VARCHAR(100) | NULL | User who deleted record |
+
+**Indexes:**
+- PRIMARY KEY on `id_unit_of_measure`
+- UNIQUE INDEX on `name`
+- UNIQUE INDEX on `abbreviation`
+
+### furniture_type
+
+Classifies different types of furniture.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id_furniture_type` | INTEGER | PRIMARY KEY | Unique identifier |
+| `name` | VARCHAR(50) | NOT NULL, UNIQUE | Furniture type name |
+| `active` | BOOLEAN | NOT NULL, DEFAULT TRUE | Active status |
+| `created_at` | TIMESTAMP | NOT NULL, DEFAULT CURRENT_TIMESTAMP | Creation timestamp |
+| `updated_at` | TIMESTAMP | NOT NULL, DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | Last update timestamp |
+| `deleted_at` | TIMESTAMP | NULL | Soft delete timestamp |
+| `created_by` | VARCHAR(100) | NULL | User who created record |
+| `updated_by` | VARCHAR(100) | NULL | User who updated record |
+| `deleted_by` | VARCHAR(100) | NULL | User who deleted record |
+
+**Indexes:**
+- PRIMARY KEY on `id_furniture_type`
+- UNIQUE INDEX on `name`
+
+## Common Schema Patterns
+
+### Standard Field Structure
+
+All tables follow a consistent field pattern:
+
+<Tabs>
+  <Tab title="Primary Key">
+    ```sql
+    id_{table_name} INTEGER PRIMARY KEY AUTO_INCREMENT
+    ```
+    
+    Each table uses an integer primary key with a descriptive name.
+  </Tab>
+  
+  <Tab title="Audit Timestamps">
+    ```sql
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP 
+               ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL
+    ```
+    
+    Automatic timestamp tracking for all record changes.
+  </Tab>
+  
+  <Tab title="User Tracking">
+    ```sql
+    created_by VARCHAR(100) NULL,
+    updated_by VARCHAR(100) NULL,
+    deleted_by VARCHAR(100) NULL
+    ```
+    
+    Tracks which user performed each action.
+  </Tab>
+  
+  <Tab title="Soft Delete">
+    ```sql
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    deleted_at TIMESTAMP NULL
+    ```
+    
+    Enables soft deletion of records.
+  </Tab>
+</Tabs>
+
+### Naming Conventions
+
+<AccordionGroup>
+  <Accordion title="Table Names">
+    - Use **plural** form: `colors`, `roles`, `wood_types`
+    - Use **snake_case**: `unit_of_measures`, not `UnitOfMeasures`
+    - Be descriptive and specific
+  </Accordion>
+  
+  <Accordion title="Column Names">
+    - Use **snake_case**: `id_color`, `created_at`
+    - Primary keys: `id_{table_name}` (e.g., `id_color`)
+    - Foreign keys: `id_{referenced_table}` (e.g., `id_color` in furniture table)
+    - Booleans: Use affirmative names (`active`, not `inactive`)
+  </Accordion>
+  
+  <Accordion title="Constraint Names">
+    - Primary keys: `pk_{table_name}`
+    - Foreign keys: `fk_{table}_{referenced_table}`
+    - Unique constraints: `uq_{table}_{column}`
+    - Indexes: `idx_{table}_{column}`
+  </Accordion>
+</AccordionGroup>
+
+## Data Types
+
+### String Fields
+
+```sql
+-- Short names and identifiers
+name VARCHAR(50) NOT NULL
+
+-- Longer text fields
+description VARCHAR(255) NULL
+
+-- Abbreviations
+abbreviation VARCHAR(10) NOT NULL
+
+-- User identifiers
+created_by VARCHAR(100) NULL
+
+-- Very long text
+notes TEXT NULL
+```
+
+### Numeric Fields
+
+```sql
+-- Integer IDs and counts
+id_color INTEGER PRIMARY KEY
+quantity INTEGER NOT NULL DEFAULT 0
+
+-- Decimal values (prices, measurements)
+price DECIMAL(10, 2) NOT NULL
+width DECIMAL(8, 2) NULL
+```
+
+### Date/Time Fields
+
+```sql
+-- Automatic timestamps
+created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP 
+           ON UPDATE CURRENT_TIMESTAMP
+
+-- Manual dates
+delivery_date DATE NULL
+expiration_date DATE NULL
+```
+
+### Boolean Fields
+
+```sql
+-- Status flags
+active BOOLEAN NOT NULL DEFAULT TRUE
+is_published BOOLEAN NOT NULL DEFAULT FALSE
+```
+
+## Schema Evolution
+
+### Adding New Tables
+
+When adding a new table, follow this template:
+
+```sql
+CREATE TABLE new_table (
+    id_new_table INTEGER PRIMARY KEY AUTO_INCREMENT,
+    
+    -- Business fields
+    name VARCHAR(100) NOT NULL,
+    description VARCHAR(255) NULL,
+    
+    -- Status
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    
+    -- Audit timestamps
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP 
+               ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL,
+    
+    -- User tracking
+    created_by VARCHAR(100) NULL,
+    updated_by VARCHAR(100) NULL,
+    deleted_by VARCHAR(100) NULL,
+    
+    -- Constraints
+    UNIQUE KEY uq_new_table_name (name)
+);
+```
+
+### Adding Relationships
+
+When adding foreign keys:
+
+```sql
+-- Add foreign key column
+ALTER TABLE furniture 
+ADD COLUMN id_color INTEGER NULL;
+
+-- Add constraint
+ALTER TABLE furniture
+ADD CONSTRAINT fk_furniture_color 
+FOREIGN KEY (id_color) REFERENCES colors(id_color)
+ON DELETE SET NULL
+ON UPDATE CASCADE;
+
+-- Add index for performance
+CREATE INDEX idx_furniture_color ON furniture(id_color);
+```
+
+## Database Configuration
+
+### Connection Settings
+
+Database configuration is managed through environment variables:
+
+```python config.py
+import os
+
+class Config:
+    DB_USER = os.getenv('DB_USER')
+    DB_PASSWORD = os.getenv('DB_PASSWORD')
+    DB_HOST = os.getenv('DB_HOST', 'localhost')
+    DB_PORT = os.getenv('DB_PORT', '3306')
+    DB_NAME = os.getenv('DB_NAME')
+    
+    SQLALCHEMY_DATABASE_URI = (
+        f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@"
+        f"{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    )
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+```
+
+### Environment Variables
+
+```bash .env
+DB_USER=furniture_user
+DB_PASSWORD=secure_password
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=furniture_store
+```
+
+<Warning>
+Never commit `.env` files to version control. Use `.env.example` as a template.
+</Warning>
+
+## Query Performance
+
+### Recommended Indexes
+
+All tables have these indexes by default:
+
+```sql
+-- Primary key (automatic)
+PRIMARY KEY (id_{table_name})
+
+-- Unique constraint on name
+UNIQUE KEY uq_{table}_name (name)
+
+-- Performance indexes
+INDEX idx_{table}_active (active)
+INDEX idx_{table}_created_at (created_at)
+```
+
+### Query Optimization
+
+<Tabs>
+  <Tab title="Filter Active Records">
+    Always filter by `active` status:
+    
+    ```python
+    # Good - uses index
+    colors = Color.query.filter_by(active=True).all()
+    
+    # Avoid - scans all records
+    colors = [c for c in Color.query.all() if c.active]
+    ```
+  </Tab>
+  
+  <Tab title="Case-Insensitive Search">
+    Use database functions for case-insensitive queries:
+    
+    ```python
+    from sqlalchemy import func
+    
+    # Case-insensitive search
+    color = Color.query.filter(
+        func.lower(Color.name) == name.lower()
+    ).first()
+    ```
+  </Tab>
+  
+  <Tab title="Count Efficiently">
+    Use COUNT queries instead of loading all records:
+    
+    ```python
+    # Good - database COUNT
+    count = Color.query.filter_by(active=True).count()
+    
+    # Avoid - loads all records
+    count = len(Color.query.filter_by(active=True).all())
+    ```
+  </Tab>
+</Tabs>
+
+## Schema Maintenance
+
+### Regular Tasks
+
+<Steps>
+  <Step title="Backup Database">
+    ```bash
+    mysqldump -u user -p furniture_store > backup_$(date +%Y%m%d).sql
+    ```
+  </Step>
+  
+  <Step title="Optimize Tables">
+    ```sql
+    OPTIMIZE TABLE colors, roles, wood_types, unit_of_measures, furniture_type;
+    ```
+  </Step>
+  
+  <Step title="Analyze Performance">
+    ```sql
+    ANALYZE TABLE colors;
+    SHOW INDEX FROM colors;
+    ```
+  </Step>
+  
+  <Step title="Monitor Growth">
+    ```sql
+    SELECT 
+        table_name,
+        table_rows,
+        ROUND(data_length / 1024 / 1024, 2) as data_mb,
+        ROUND(index_length / 1024 / 1024, 2) as index_mb
+    FROM information_schema.tables
+    WHERE table_schema = 'furniture_store';
+    ```
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Database Models" icon="database" href="/architecture/database/models">
+    Learn about ORM model definitions
+  </Card>
+  <Card title="Migrations" icon="code-branch" href="/architecture/database/migrations">
+    Understand the migration system
+  </Card>
+</CardGroup>

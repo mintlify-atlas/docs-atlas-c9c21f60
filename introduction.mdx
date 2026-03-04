@@ -1,0 +1,252 @@
+---
+title: Introduction to Muebles Roble
+description: A comprehensive furniture production management system built with Flask for the wood furniture manufacturing industry
+---
+
+# Welcome to Muebles Roble
+
+Muebles Roble is a production management system designed specifically for the furniture manufacturing industry. Built with Flask and following modern architectural patterns, it provides complete control over the production workflow from raw materials to finished products.
+
+<Info>
+  This system is an academic project focused on transformation industry processes, enabling full traceability from raw materials to finished goods.
+</Info>
+
+## What is Muebles Roble?
+
+Muebles Roble (Oak Furniture) is a web-based application that helps furniture manufacturers manage their entire production process. The system tracks:
+
+- **Raw Material Inventory** - Wood types and supplies
+- **Finished Product Inventory** - Tables, chairs, closets, and more
+- **Product Catalogs** - Wood types, colors, furniture types
+- **Production Processes** - Complete production workflow tracking
+- **Inventory Control** - Full traceability and audit trails
+
+## Core Capabilities
+
+<CardGroup cols={2}>
+  <Card title="Catalog Management" icon="list">
+    Manage wood types (Pine, Cedar, Oak), colors (Natural, White, Black), and furniture types with complete CRUD operations.
+  </Card>
+  
+  <Card title="Inventory Tracking" icon="boxes">
+    Track raw materials and finished products with real-time inventory updates and audit trails.
+  </Card>
+  
+  <Card title="Production Control" icon="industry">
+    Monitor the production process from raw materials to finished goods with full traceability.
+  </Card>
+  
+  <Card title="Audit & Compliance" icon="clipboard-check">
+    Comprehensive audit trails tracking who created, updated, or deleted each record and when.
+  </Card>
+</CardGroup>
+
+## Technology Stack
+
+Muebles Roble is built on modern, proven technologies:
+
+- **Python 3.10.11** - Core programming language
+- **Flask 3.1.2** - Lightweight web framework
+- **Flask-SQLAlchemy** - ORM for database operations
+- **Flask-WTF** - Form handling with CSRF protection
+- **Flask-Migrate** - Database migration management
+- **Jinja2** - Template engine for HTML rendering
+- **MySQL** - Relational database
+- **PyMySQL** - MySQL database connector
+
+<Note>
+  The system uses a layered MVC architecture with clear separation between presentation, business logic, and data access layers.
+</Note>
+
+## Architecture Overview
+
+The application follows a **layered MVC (Model-View-Controller)** architecture:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    PRESENTATION LAYER                       │
+│               (routes.py + Jinja2 templates)                │
+│          Routes / Controllers / HTML Views                  │
+├─────────────────────────────────────────────────────────────┤
+│                  BUSINESS LOGIC LAYER                       │
+│                      (services.py)                          │
+│     Business Rules / Validations / Processing               │
+├─────────────────────────────────────────────────────────────┤
+│                    DATA ACCESS LAYER                        │
+│                       (models/)                             │
+│          Entities / SQLAlchemy ORM / Database               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Layer Responsibilities
+
+| Layer | Files | Responsibility |
+|-------|-------|----------------|
+| **Presentation** | `routes.py` + `templates/` | Handles HTTP requests, form validation, and renders HTML views |
+| **Business Logic** | `services.py` | Contains business rules, validations, and operation orchestration |
+| **Data Access** | `models/*.py` | Defines entities and their mapping to database tables |
+| **Configuration** | `config.py`, `extensions.py` | Environment configuration, database connection, Flask extensions |
+
+## Module Organization
+
+The application organizes functionality into **domain modules**:
+
+```
+app/
+├── catalogs/              # Catalog management modules
+│   ├── colors/            # Color catalog (Natural, White, Black, etc.)
+│   ├── wood_types/        # Wood types (Pine, Cedar, Oak, etc.)
+│   ├── furniture_type/    # Furniture types (Tables, Chairs, Closets)
+│   ├── unit_of_measures/  # Units of measure (kg, m², pieces)
+│   └── roles/             # User roles (Admin, Operator, Viewer)
+│
+├── inventory/             # Inventory management (planned)
+├── production/            # Production processes (planned)
+└── models/                # All database models
+```
+
+Each module follows a consistent structure:
+
+```
+module_name/
+├── __init__.py      # Blueprint registration
+├── routes.py        # HTTP routes and controllers
+├── services.py      # Business logic
+└── forms.py         # WTForms for validation
+```
+
+## Request Flow
+
+Here's how a typical request flows through the system:
+
+<Steps>
+  <Step title="User Submits Form">
+    The user fills out a form in the browser (e.g., creating a new color) and submits it.
+  </Step>
+  
+  <Step title="Route Receives Request">
+    The `routes.py` file receives the HTTP request and validates the form using WTForms with CSRF protection.
+  </Step>
+  
+  <Step title="Service Processes Logic">
+    The route calls the appropriate service method (e.g., `ColorService.create()`), which applies business rules and validations.
+  </Step>
+  
+  <Step title="Model Interacts with Database">
+    The service uses SQLAlchemy models to create/update database records with proper transaction handling.
+  </Step>
+  
+  <Step title="Template Renders Response">
+    The route renders a Jinja2 template with the result, showing success/error messages using flash messages.
+  </Step>
+</Steps>
+
+## Key Features
+
+### 🔒 Security Built-In
+
+- **CSRF Protection** - All forms protected with Flask-WTF tokens
+- **SQL Injection Prevention** - SQLAlchemy ORM parameterized queries
+- **Environment Variables** - Sensitive data stored in `.env` files
+- **Production Safety** - Enforced SECRET_KEY in production environments
+
+### 📊 Audit Trail
+
+Every record includes comprehensive audit fields:
+
+```python
+created_at = db.Column(db.TIMESTAMP, server_default=func.current_timestamp())
+updated_at = db.Column(db.TIMESTAMP, server_onupdate=func.current_timestamp())
+deleted_at = db.Column(db.TIMESTAMP, nullable=True)
+
+created_by = db.Column(db.String(100))
+updated_by = db.Column(db.String(100))
+deleted_by = db.Column(db.String(100))
+```
+
+### ♻️ Soft Deletes
+
+The system uses logical deletion instead of physical deletion:
+
+- Records are marked as inactive (`active = False`)
+- Deletion timestamp and user are recorded
+- Data is preserved for audit and recovery purposes
+
+### ✅ Validation Layers
+
+1. **Client-side** - HTML5 form validation
+2. **Form-level** - WTForms validators
+3. **Business-level** - Service layer validation
+4. **Database-level** - Constraints and unique indexes
+
+## Error Handling
+
+The system uses a hierarchical exception system:
+
+```
+AppException (Base)
+├── ValidationError (400)     # Invalid input data
+├── NotFoundError (404)       # Resource not found
+├── ConflictError (409)       # Duplicate/conflict
+├── UnauthorizedError (401)   # Not authenticated
+├── ForbiddenError (403)      # Not authorized
+├── BusinessLogicError (422)  # Business rule violation
+└── DatabaseError (500)       # Database operation failed
+```
+
+Exceptions are caught at the route level and displayed to users via flash messages.
+
+## Design Principles
+
+<Accordion title="Separation of Concerns">
+  Each layer has a single, well-defined responsibility. Routes handle HTTP, services handle business logic, and models handle data persistence.
+</Accordion>
+
+<Accordion title="Loose Coupling">
+  Layers communicate through well-defined interfaces. Services don't know about HTTP, and routes don't contain business logic.
+</Accordion>
+
+<Accordion title="High Cohesion">
+  Related functionality is grouped together in modules. All color-related code lives in the `colors/` module.
+</Accordion>
+
+<Accordion title="DRY (Don't Repeat Yourself)">
+  Common functionality is extracted into reusable services and utilities to avoid code duplication.
+</Accordion>
+
+<Accordion title="Fail Fast">
+  Validation happens early in the request lifecycle with clear, actionable error messages.
+</Accordion>
+
+## Who Should Use This System?
+
+Muebles Roble is ideal for:
+
+- **Small to medium furniture manufacturers** looking to digitize their production tracking
+- **Academic projects** studying transformation industry processes
+- **Developers** learning Flask, SQLAlchemy, and layered architecture patterns
+- **Carpentry workshops** needing inventory and production management
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Key Features" icon="star" href="/features">
+    Explore the complete feature set and capabilities
+  </Card>
+  
+  <Card title="Installation" icon="download" href="/quickstart/installation">
+    Get the system up and running in minutes
+  </Card>
+  
+  <Card title="Configuration" icon="gear" href="/quickstart/configuration">
+    Configure database and environment variables
+  </Card>
+  
+  <Card title="First Steps" icon="rocket" href="/quickstart/first-steps">
+    Create your first catalog entries and explore the system
+  </Card>
+</CardGroup>
+
+<Tip>
+  Start with the [Installation Guide](/quickstart/installation) to get the system running on your local machine.
+</Tip>
